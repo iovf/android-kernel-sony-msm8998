@@ -41,7 +41,7 @@
 	android {
 		fstab {
 			vendor {
-				fsmgr_flags = "wait,verify=/dev/block/platform/soc/1da4000.ufshc/by-name/fsmetadata";
+				fsmgr_flags = "wait";
 			};
 
 			system {
@@ -49,7 +49,7 @@
 					dev = "/dev/block/platform/soc/1da4000.ufshc/by-name/system";
 					type = "ext4";
 					mnt_flags = "ro,barrier=1,discard";
-					fsmgr_flags = "wait,verify=/dev/block/platform/soc/1da4000.ufshc/by-name/fsmetadata";
+					fsmgr_flags = "wait";
 					status = "ok";
 			};
 		};
@@ -164,6 +164,14 @@
 			preset_x_max = <2159>;
 			preset_y_max = <3839>;
 			preset_n_fingers = <10>;
+			wakeup_gesture_supported = <1>;
+			wakeup_gesture_lpm_disabled = <1>;
+			wakeup_gesture_timeout = <0>;
+			stamina_mode_supported = <0x80000007>;
+			doze_default_time = <35>;
+			doze_glove_mode_time = <35>;
+			doze_cover_mode_time = <35>;
+			doze_force_doze_mode_time = <1>;
 			wakeup_gesture {
 				double_tap {
 					gesture_code = <0x0003>;
@@ -173,12 +181,12 @@
 					};
 					event_01 {
 						type = <1>; /* KEY */
-						code = <531>; /* TOUCHPAD_ON */
+						code = <143>; /* KEY_WAKEUP */
 						down = <1>;
 					};
 					event_02 {
 						type = <1>; /* KEY */
-						code = <531>; /* TOUCHPAD_ON */
+						code = <143>; /* KEY_WAKEUP */
 						down = <0>;
 					};
 					event_03 {

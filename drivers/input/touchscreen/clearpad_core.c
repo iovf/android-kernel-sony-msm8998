@@ -6927,7 +6927,6 @@ end:
 
 static int clearpad_pm_suspend(struct device *dev)
 {
-#ifdef CLEARPAD_WAKEUP_GESTURE
 	struct clearpad_t *this = dev_get_drvdata(dev);
 
 	HWLOGI(this, "pm suspend was called\n");
@@ -6939,13 +6938,11 @@ static int clearpad_pm_suspend(struct device *dev)
 
 	HWLOGI(this, "pm suspend(active=%s)\n",
 	       this->dev_active ? "true" : "false");
-#endif
 	return 0;
 }
 
 static int clearpad_pm_resume(struct device *dev)
 {
-#ifdef CLEARPAD_WAKEUP_GESTURE
 	struct clearpad_t *this = dev_get_drvdata(dev);
 
 	HWLOGI(this, "pm resume was called\n");
@@ -6956,7 +6953,6 @@ static int clearpad_pm_resume(struct device *dev)
 
 	HWLOGI(this, "pm resume(active=%s)\n",
 	       this->dev_active ? "true" : "false");
-#endif
 	return 0;
 }
 

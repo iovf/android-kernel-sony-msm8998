@@ -40,4 +40,27 @@
 	nfc,pm-ops {
 		compatible = "sony,pn553-pm-ops";
 	};
+
+	somc_pinctrl: somc_pinctrl {
+		/* If variant specific default setting is needed,
+		fill pinctrl-2 value in <variant>.dtsi */
+		pinctrl-2 = <&msm_gpio_92 &msm_gpio_93>;
+	};
+};
+
+&tlmm {
+	/* GPIO_92 : NFC_IRQ_FELICA_INT_N */
+	msm_gpio_92: msm_gpio_92 {
+		mux {
+			pins = "gpio92";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio92";
+			drive-strength = <2>;
+			bias-pull-down;
+			input-enable;
+		};
+	};
 };
