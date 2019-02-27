@@ -1294,7 +1294,23 @@ static int check_version(Elf_Shdr *sechdrs,
 {
 	unsigned int i, num_versions;
 	struct modversion_info *versions;
-	if(!strncmp("wlan", mod->name, 4))
+	if(!strncmp("rdbg", mod->name, 4))
+		return 1;
+	if(!strncmp("ufs_test", mod->name, 4))
+		return 1;
+	if(!strncmp("test_iosched", mod->name, 4))
+		return 1;
+	if(!strncmp("mpq_dmx_hw_plugin", mod->name, 4))
+		return 1;
+	if(!strncmp("tspp", mod->name, 4))
+		return 1;
+	if(!strncmp("mpq_adapter", mod->name, 4))
+		return 1;
+	if(!strncmp("gspca_main", mod->name, 4))
+		return 1;
+	if(!strncmp("msm_11ad_proxy", mod->name, 4))
+		return 1;
+	if(!strncmp("br_netfilter", mod->name, 4))
 		return 1;
 	if(!strncmp("kscl", mod->name, 4))
 		return 1;
@@ -1307,6 +1323,8 @@ static int check_version(Elf_Shdr *sechdrs,
 	if(!strncmp("fpc1145_platform", mod->name, 4))
 		return 1;
 	if(!strncmp("pn553", mod->name, 4))
+		return 1;
+	if(!strncmp("wlan", mod->name, 4))
 		return 1;
 	if(!strncmp("texfat", mod->name, 6))
 		return 1;
