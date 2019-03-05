@@ -1,8 +1,14 @@
 rm -rf out
 export ARCH=arm64
-export PATH=/root/aarch64-linux-android-4.9/bin/:$PATH
-export CROSS_COMPILE=aarch64-linux-android-
+#export PATH=/root/build_tool/aarch64/bin/:$PATH
+export CLANG_PATH=/root/build_tool/clang-4691093/bin/
+export CROSS_COMPILE=/root/build_tool/aarch64/bin/aarch64-linux-android-
+export PATH=${CLANG_PATH}:${PATH}
+export CLANG_HOST=yes
+export CLANG_TRIPLE=aarch64-linux-gnu-
 export KBUILD_DIFFCONFIG=maple_diffconfig
+export USE_CCACHE=1
+export CCACHE_DIR=~/.ccache
 make msmcortex-perf_defconfig O=./out
 make -j6 O=./out
 ../Final/mkbootimg.py \
