@@ -9,6 +9,11 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
+/*
+ * NOTE: This file has been modified by Sony Mobile Communications Inc.
+ * Modifications are Copyright (c) 2018 Sony Mobile Communications Inc,
+ * and licensed under the license of the file.
+ */
 
 #ifndef _SDE_HW_CTL_H
 #define _SDE_HW_CTL_H
@@ -16,6 +21,8 @@
 #include "sde_hw_mdss.h"
 #include "sde_hw_util.h"
 #include "sde_hw_catalog.h"
+#include "sde_hw_sspp.h"
+#include "sde_hw_blk.h"
 
 /**
  * sde_ctl_mode_sel: Interface mode selection
@@ -27,13 +34,30 @@ enum sde_ctl_mode_sel {
 	SDE_CTL_MODE_SEL_CMD
 };
 
+/**
+ * sde_ctl_rot_op_mode - inline rotation mode
+ * SDE_CTL_ROT_OP_MODE_OFFLINE: offline rotation
+ * SDE_CTL_ROT_OP_MODE_RESERVED: reserved
+ * SDE_CTL_ROT_OP_MODE_INLINE_SYNC: inline rotation synchronous mode
+ * SDE_CTL_ROT_OP_MODE_INLINE_ASYNC: inline rotation asynchronous mode
+ */
+enum sde_ctl_rot_op_mode {
+	SDE_CTL_ROT_OP_MODE_OFFLINE,
+	SDE_CTL_ROT_OP_MODE_RESERVED,
+	SDE_CTL_ROT_OP_MODE_INLINE_SYNC,
+	SDE_CTL_ROT_OP_MODE_INLINE_ASYNC,
+};
+
 struct sde_hw_ctl;
 /**
  * struct sde_hw_stage_cfg - blending stage cfg
- * @stage
+ * @stage : SSPP_ID at each stage
+ * @multirect_index: index of the rectangle of SSPP.
  */
 struct sde_hw_stage_cfg {
-	enum sde_sspp stage[CRTC_DUAL_MIXERS][SDE_STAGE_MAX][PIPES_PER_STAGE];
+	enum sde_sspp stage[SDE_STAGE_MAX][PIPES_PER_STAGE];
+	enum sde_sspp_multirect_index multirect_index
+					[SDE_STAGE_MAX][PIPES_PER_STAGE];
 };
 
 /**
@@ -53,6 +77,14 @@ struct sde_hw_intf_cfg {
 };
 
 /**
+ * struct sde_ctl_sbuf_cfg - control for stream buffer configuration
+ * @rot_op_mode: rotator operation mode
+ */
+struct sde_ctl_sbuf_cfg {
+	enum sde_ctl_rot_op_mode rot_op_mode;
+};
+
+/**
  * struct sde_hw_ctl_ops - Interface to the wb Hw driver functions
  * Assumption is these functions will be called after clocks are enabled
  */
@@ -63,6 +95,21 @@ struct sde_hw_ctl_ops {
 	 * @ctx       : ctl path ctx pointer
 	 */
 	void (*trigger_start)(struct sde_hw_ctl *ctx);
+
+	/**
+	 * kickoff prepare is in progress hw operation for sw
+	 * controlled interfaces: DSI cmd mode and WB interface
+	 * are SW controlled
+	 * @ctx       : ctl path ctx pointer
+	 */
+	void (*trigger_pending)(struct sde_hw_ctl *ctx);
+
+	/**
+	 * kickoff rotator operation for Sw controlled interfaces
+	 * DSI cmd mode and WB interface are SW controlled
+	 * @ctx       : ctl path ctx pointer
+	 */
+	void (*trigger_rot_start)(struct sde_hw_ctl *ctx);
 
 	/**
 	 * Clear the value of the cached pending_flush_mask
@@ -108,7 +155,30 @@ struct sde_hw_ctl_ops {
 	void (*setup_intf_cfg)(struct sde_hw_ctl *ctx,
 		struct sde_hw_intf_cfg *cfg);
 
+	/**
+	 * Update the interface selection with input WB config
+	 * @ctx       : ctl path ctx pointer
+	 * @cfg       : pointer to input wb config
+	 * @enable    : set if true, clear otherwise
+	 */
+	void (*update_wb_cfg)(struct sde_hw_ctl *ctx,
+		struct sde_hw_intf_cfg *cfg, bool enable);
+
 	int (*reset)(struct sde_hw_ctl *c);
+
+	/**
+	 * get_reset - check ctl reset status bit
+	 * @ctx    : ctl path ctx pointer
+	 * Returns: current value of ctl reset status
+	 */
+	u32 (*get_reset)(struct sde_hw_ctl *ctx);
+
+	/**
+	 * hard_reset - force reset on ctl_path
+	 * @ctx    : ctl path ctx pointer
+	 * @enable : whether to enable/disable hard reset
+	 */
+	void (*hard_reset)(struct sde_hw_ctl *c, bool enable);
 
 	/*
 	 * wait_reset_status - checks ctl reset status
@@ -131,6 +201,10 @@ struct sde_hw_ctl_ops {
 		u32 *flushbits,
 		enum sde_dspp blk);
 
+	int (*get_bitmask_dspp_pavlut)(struct sde_hw_ctl *ctx,
+		u32 *flushbits,
+		enum sde_dspp blk);
+
 	int (*get_bitmask_intf)(struct sde_hw_ctl *ctx,
 		u32 *flushbits,
 		enum sde_intf blk);
@@ -143,57 +217,73 @@ struct sde_hw_ctl_ops {
 		u32 *flushbits,
 		enum sde_wb blk);
 
+	int (*get_bitmask_rot)(struct sde_hw_ctl *ctx,
+		u32 *flushbits,
+		enum sde_rot blk);
+
+	/**
+	 * read CTL_TOP register value and return
+	 * the data.
+	 * @ctx		: ctl path ctx pointer
+	 * @return	: CTL top register value
+	 */
+	u32 (*read_ctl_top)(struct sde_hw_ctl *ctx);
+
+	/**
+	 * read CTL layers register value and return
+	 * the data.
+	 * @ctx       : ctl path ctx pointer
+	 * @index       : layer index for this ctl path
+	 * @return	: CTL layers register value
+	 */
+	u32 (*read_ctl_layers)(struct sde_hw_ctl *ctx, int index);
+
 	/**
 	 * Set all blend stages to disabled
 	 * @ctx       : ctl path ctx pointer
-	 * @handoff   : handoff flag
-	 * @resv_pipes  : reserved pipes in DT
-	 * @resv_pipes_length:    array size of array reserved_pipes
 	 */
-	void (*clear_all_blendstages)(struct sde_hw_ctl *ctx,
-		bool handoff, const u32 *resv_pipes, u32 resv_pipes_length);
+	void (*clear_all_blendstages)(struct sde_hw_ctl *ctx);
 
 	/**
 	 * Configure layer mixer to pipe configuration
 	 * @ctx       : ctl path ctx pointer
 	 * @lm        : layer mixer enumeration
 	 * @cfg       : blend stage configuration
-	 * @handoff   : handoff flag
-	 * @resv_pipes  : reserved pipes in DT
-	 * @resv_pipes_length:   array size of array reserved_pipes
 	 */
 	void (*setup_blendstage)(struct sde_hw_ctl *ctx,
-		enum sde_lm lm, struct sde_hw_stage_cfg *cfg, u32 index,
-		bool handoff, const u32 *resv_pipes, u32 resv_pipes_length);
+		enum sde_lm lm, struct sde_hw_stage_cfg *cfg);
+
+	void (*setup_sbuf_cfg)(struct sde_hw_ctl *ctx,
+		struct sde_ctl_sbuf_cfg *cfg);
 
 	/**
-	 * read CTL_TOP register value for splash case
+	 * Flush the reg dma by sending last command.
 	 * @ctx       : ctl path ctx pointer
-	 * @Return    : CTL top register value
+	 * @blocking  : if set to true api will block until flush is done
 	 */
-	u32 (*read_ctl_top_for_splash)(struct sde_hw_ctl *ctx);
+	void (*reg_dma_flush)(struct sde_hw_ctl *ctx, bool blocking);
 
 	/**
-	 * read CTL layers register value for splash case
+	 * check if ctl start trigger state to confirm the frame pending
+	 * status
 	 * @ctx       : ctl path ctx pointer
-	 * @index     : layer index for this ctl path
-	 * @Return    : CTL layers register value
 	 */
-	u32 (*read_ctl_layers_for_splash)(struct sde_hw_ctl *ctx, int index);
+	int (*get_start_state)(struct sde_hw_ctl *ctx);
 };
 
 /**
  * struct sde_hw_ctl : CTL PATH driver object
+ * @base: hardware block base structure
  * @hw: block register map object
  * @idx: control path index
- * @ctl_hw_caps: control path capabilities
+ * @caps: control path capabilities
  * @mixer_count: number of mixers
  * @mixer_hw_caps: mixer hardware capabilities
  * @pending_flush_mask: storage for pending ctl_flush managed via ops
  * @ops: operation list
  */
 struct sde_hw_ctl {
-	/* base */
+	struct sde_hw_blk base;
 	struct sde_hw_blk_reg_map hw;
 
 	/* ctl path */
@@ -206,6 +296,16 @@ struct sde_hw_ctl {
 	/* ops */
 	struct sde_hw_ctl_ops ops;
 };
+
+/**
+ * sde_hw_ctl - convert base object sde_hw_base to container
+ * @hw: Pointer to base hardware block
+ * return: Pointer to hardware block container
+ */
+static inline struct sde_hw_ctl *to_sde_hw_ctl(struct sde_hw_blk *hw)
+{
+	return container_of(hw, struct sde_hw_ctl, base);
+}
 
 /**
  * sde_hw_ctl_init(): Initializes the ctl_path hw driver object.

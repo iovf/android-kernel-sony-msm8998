@@ -1,4 +1,4 @@
-/* Copyright (c) 2015-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -263,109 +263,109 @@ static const struct sde_format sde_format_map[] = {
 
 	INTERLEAVED_RGB_FMT(RGB565,
 		0, COLOR_5BIT, COLOR_6BIT, COLOR_5BIT,
-		C1_B_Cb, C0_G_Y, C2_R_Cr, 0, 3,
+		C2_R_Cr, C0_G_Y, C1_B_Cb, 0, 3,
 		false, 2, 0,
 		SDE_FETCH_LINEAR, 1),
 
 	INTERLEAVED_RGB_FMT(BGR565,
 		0, COLOR_5BIT, COLOR_6BIT, COLOR_5BIT,
-		C2_R_Cr, C0_G_Y, C1_B_Cb, 0, 3,
+		C1_B_Cb, C0_G_Y, C2_R_Cr, 0, 3,
 		false, 2, 0,
 		SDE_FETCH_LINEAR, 1),
 
 	INTERLEAVED_RGB_FMT(ARGB1555,
 		COLOR_ALPHA_1BIT, COLOR_5BIT, COLOR_5BIT, COLOR_5BIT,
-		C1_B_Cb, C0_G_Y, C2_R_Cr, C3_ALPHA, 4,
+		C3_ALPHA, C2_R_Cr, C0_G_Y, C1_B_Cb, 4,
 		true, 2, 0,
 		SDE_FETCH_LINEAR, 1),
 
 	INTERLEAVED_RGB_FMT(ABGR1555,
 		COLOR_ALPHA_1BIT, COLOR_5BIT, COLOR_5BIT, COLOR_5BIT,
-		C2_R_Cr, C0_G_Y, C1_B_Cb, C3_ALPHA, 4,
+		C3_ALPHA, C1_B_Cb, C0_G_Y, C2_R_Cr, 4,
 		true, 2, 0,
 		SDE_FETCH_LINEAR, 1),
 
 	INTERLEAVED_RGB_FMT(RGBA5551,
 		COLOR_ALPHA_1BIT, COLOR_5BIT, COLOR_5BIT, COLOR_5BIT,
-		C3_ALPHA, C1_B_Cb, C0_G_Y, C2_R_Cr, 4,
+		C2_R_Cr, C0_G_Y, C1_B_Cb, C3_ALPHA, 4,
 		true, 2, 0,
 		SDE_FETCH_LINEAR, 1),
 
 	INTERLEAVED_RGB_FMT(BGRA5551,
 		COLOR_ALPHA_1BIT, COLOR_5BIT, COLOR_5BIT, COLOR_5BIT,
-		C3_ALPHA, C2_R_Cr, C0_G_Y, C1_B_Cb, 4,
+		C1_B_Cb, C0_G_Y, C2_R_Cr, C3_ALPHA, 4,
 		true, 2, 0,
 		SDE_FETCH_LINEAR, 1),
 
 	INTERLEAVED_RGB_FMT(XRGB1555,
 		COLOR_ALPHA_1BIT, COLOR_5BIT, COLOR_5BIT, COLOR_5BIT,
-		C1_B_Cb, C0_G_Y, C2_R_Cr, C3_ALPHA, 4,
+		C3_ALPHA, C2_R_Cr, C0_G_Y, C1_B_Cb, 4,
 		false, 2, 0,
 		SDE_FETCH_LINEAR, 1),
 
 	INTERLEAVED_RGB_FMT(XBGR1555,
 		COLOR_ALPHA_1BIT, COLOR_5BIT, COLOR_5BIT, COLOR_5BIT,
-		C2_R_Cr, C0_G_Y, C1_B_Cb, C3_ALPHA, 4,
+		C3_ALPHA, C1_B_Cb, C0_G_Y, C2_R_Cr, 4,
 		false, 2, 0,
 		SDE_FETCH_LINEAR, 1),
 
 	INTERLEAVED_RGB_FMT(RGBX5551,
 		COLOR_ALPHA_1BIT, COLOR_5BIT, COLOR_5BIT, COLOR_5BIT,
-		C3_ALPHA, C1_B_Cb, C0_G_Y, C2_R_Cr, 4,
+		C2_R_Cr, C0_G_Y, C1_B_Cb, C3_ALPHA, 4,
 		false, 2, 0,
 		SDE_FETCH_LINEAR, 1),
 
 	INTERLEAVED_RGB_FMT(BGRX5551,
 		COLOR_ALPHA_1BIT, COLOR_5BIT, COLOR_5BIT, COLOR_5BIT,
-		C3_ALPHA, C2_R_Cr, C0_G_Y, C1_B_Cb, 4,
+		C1_B_Cb, C0_G_Y, C2_R_Cr, C3_ALPHA, 4,
 		false, 2, 0,
 		SDE_FETCH_LINEAR, 1),
 
 	INTERLEAVED_RGB_FMT(ARGB4444,
 		COLOR_ALPHA_4BIT, COLOR_4BIT, COLOR_4BIT, COLOR_4BIT,
-		C1_B_Cb, C0_G_Y, C2_R_Cr, C3_ALPHA, 4,
+		C3_ALPHA, C2_R_Cr, C0_G_Y, C1_B_Cb, 4,
 		true, 2, 0,
 		SDE_FETCH_LINEAR, 1),
 
 	INTERLEAVED_RGB_FMT(ABGR4444,
 		COLOR_ALPHA_4BIT, COLOR_4BIT, COLOR_4BIT, COLOR_4BIT,
-		C2_R_Cr, C0_G_Y, C1_B_Cb, C3_ALPHA, 4,
+		C3_ALPHA, C1_B_Cb, C0_G_Y, C2_R_Cr, 4,
 		true, 2, 0,
 		SDE_FETCH_LINEAR, 1),
 
 	INTERLEAVED_RGB_FMT(RGBA4444,
 		COLOR_ALPHA_4BIT, COLOR_4BIT, COLOR_4BIT, COLOR_4BIT,
-		C3_ALPHA, C1_B_Cb, C0_G_Y, C2_R_Cr, 4,
+		C2_R_Cr, C0_G_Y, C1_B_Cb, C3_ALPHA, 4,
 		true, 2, 0,
 		SDE_FETCH_LINEAR, 1),
 
 	INTERLEAVED_RGB_FMT(BGRA4444,
 		COLOR_ALPHA_4BIT, COLOR_4BIT, COLOR_4BIT, COLOR_4BIT,
-		C3_ALPHA, C2_R_Cr, C0_G_Y, C1_B_Cb, 4,
+		C1_B_Cb, C0_G_Y, C2_R_Cr, C3_ALPHA, 4,
 		true, 2, 0,
 		SDE_FETCH_LINEAR, 1),
 
 	INTERLEAVED_RGB_FMT(XRGB4444,
 		COLOR_ALPHA_4BIT, COLOR_4BIT, COLOR_4BIT, COLOR_4BIT,
-		C1_B_Cb, C0_G_Y, C2_R_Cr, C3_ALPHA, 4,
+		C3_ALPHA, C2_R_Cr, C0_G_Y, C1_B_Cb, 4,
 		false, 2, 0,
 		SDE_FETCH_LINEAR, 1),
 
 	INTERLEAVED_RGB_FMT(XBGR4444,
 		COLOR_ALPHA_4BIT, COLOR_4BIT, COLOR_4BIT, COLOR_4BIT,
-		C2_R_Cr, C0_G_Y, C1_B_Cb, C3_ALPHA, 4,
+		C3_ALPHA, C1_B_Cb, C0_G_Y, C2_R_Cr, 4,
 		false, 2, 0,
 		SDE_FETCH_LINEAR, 1),
 
 	INTERLEAVED_RGB_FMT(RGBX4444,
 		COLOR_ALPHA_4BIT, COLOR_4BIT, COLOR_4BIT, COLOR_4BIT,
-		C3_ALPHA, C1_B_Cb, C0_G_Y, C2_R_Cr, 4,
+		C2_R_Cr, C0_G_Y, C1_B_Cb, C3_ALPHA, 4,
 		false, 2, 0,
 		SDE_FETCH_LINEAR, 1),
 
 	INTERLEAVED_RGB_FMT(BGRX4444,
 		COLOR_ALPHA_4BIT, COLOR_4BIT, COLOR_4BIT, COLOR_4BIT,
-		C3_ALPHA, C2_R_Cr, C0_G_Y, C1_B_Cb, 4,
+		C1_B_Cb, C0_G_Y, C2_R_Cr, C3_ALPHA, 4,
 		false, 2, 0,
 		SDE_FETCH_LINEAR, 1),
 
@@ -729,8 +729,8 @@ static int _sde_format_get_plane_sizes_ubwc(
 
 	color = _sde_format_get_media_color_ubwc(fmt);
 	if (color < 0) {
-		DRM_ERROR("UBWC format not supported for fmt:0x%X\n",
-			fmt->base.pixel_format);
+		DRM_ERROR("UBWC format not supported for fmt: %4.4s\n",
+			(char *)&fmt->base.pixel_format);
 		return -EINVAL;
 	}
 
@@ -794,7 +794,8 @@ static int _sde_format_get_plane_sizes_linear(
 		const struct sde_format *fmt,
 		const uint32_t width,
 		const uint32_t height,
-		struct sde_hw_fmt_layout *layout)
+		struct sde_hw_fmt_layout *layout,
+		const uint32_t *pitches)
 {
 	int i;
 
@@ -844,6 +845,17 @@ static int _sde_format_get_plane_sizes_linear(
 		}
 	}
 
+	/*
+	 * linear format: allow user allocated pitches if they are greater than
+	 * the requirement.
+	 * ubwc format: pitch values are computed uniformly across
+	 * all the components based on ubwc specifications.
+	 */
+	for (i = 0; i < layout->num_planes && i < SDE_MAX_PLANES; ++i) {
+		if (pitches && layout->plane_pitch[i] < pitches[i])
+			layout->plane_pitch[i] = pitches[i];
+	}
+
 	for (i = 0; i < SDE_MAX_PLANES; i++)
 		layout->total_size += layout->plane_size[i];
 
@@ -854,7 +866,8 @@ int sde_format_get_plane_sizes(
 		const struct sde_format *fmt,
 		const uint32_t w,
 		const uint32_t h,
-		struct sde_hw_fmt_layout *layout)
+		struct sde_hw_fmt_layout *layout,
+		const uint32_t *pitches)
 {
 	if (!layout || !fmt) {
 		DRM_ERROR("invalid pointer\n");
@@ -869,7 +882,49 @@ int sde_format_get_plane_sizes(
 	if (SDE_FORMAT_IS_UBWC(fmt) || SDE_FORMAT_IS_TILE(fmt))
 		return _sde_format_get_plane_sizes_ubwc(fmt, w, h, layout);
 
-	return _sde_format_get_plane_sizes_linear(fmt, w, h, layout);
+	return _sde_format_get_plane_sizes_linear(fmt, w, h, layout, pitches);
+}
+
+int sde_format_get_block_size(const struct sde_format *fmt,
+		uint32_t *w, uint32_t *h)
+{
+	if (!fmt || !w || !h) {
+		DRM_ERROR("invalid pointer\n");
+		return -EINVAL;
+	}
+
+	/* TP10 is 96x96 and all others are 128x128 */
+	if (SDE_FORMAT_IS_YUV(fmt) && SDE_FORMAT_IS_DX(fmt) &&
+			(fmt->num_planes == 2) && fmt->unpack_tight)
+		*w = *h = 96;
+	else
+		*w = *h = 128;
+
+	return 0;
+}
+
+uint32_t sde_format_get_framebuffer_size(
+		const uint32_t format,
+		const uint32_t width,
+		const uint32_t height,
+		const uint32_t *pitches,
+		const uint64_t *modifiers,
+		const uint32_t modifiers_len)
+{
+	const struct sde_format *fmt;
+	struct sde_hw_fmt_layout layout;
+
+	fmt = sde_get_sde_format_ext(format, modifiers, modifiers_len);
+	if (!fmt)
+		return 0;
+
+	if (!pitches)
+		return -EINVAL;
+
+	if (sde_format_get_plane_sizes(fmt, width, height, &layout, pitches))
+		layout.total_size = 0;
+
+	return layout.total_size;
 }
 
 static int _sde_format_populate_addrs_ubwc(
@@ -885,7 +940,10 @@ static int _sde_format_populate_addrs_ubwc(
 		return -EINVAL;
 	}
 
-	base_addr = msm_framebuffer_iova(fb, aspace, 0);
+	if (aspace)
+		base_addr = msm_framebuffer_iova(fb, aspace, 0);
+	else
+		base_addr = msm_framebuffer_phys(fb, 0);
 	if (!base_addr) {
 		DRM_ERROR("failed to retrieve base addr\n");
 		return -EFAULT;
@@ -970,18 +1028,22 @@ static int _sde_format_populate_addrs_linear(
 {
 	unsigned int i;
 
-	/* Update layout pitches from fb */
+	/* Can now check the pitches given vs pitches expected */
 	for (i = 0; i < layout->num_planes; ++i) {
-		if (layout->plane_pitch[i] != fb->pitches[i]) {
-			SDE_DEBUG("plane %u expected pitch %u, fb %u\n",
+		if (layout->plane_pitch[i] > fb->pitches[i]) {
+			DRM_ERROR("plane %u expected pitch %u, fb %u\n",
 				i, layout->plane_pitch[i], fb->pitches[i]);
-			layout->plane_pitch[i] = fb->pitches[i];
+			return -EINVAL;
 		}
 	}
 
 	/* Populate addresses for simple formats here */
 	for (i = 0; i < layout->num_planes; ++i) {
-		layout->plane_addr[i] = msm_framebuffer_iova(fb, aspace, i);
+		if (aspace)
+			layout->plane_addr[i] =
+				msm_framebuffer_iova(fb, aspace, i);
+		else
+			layout->plane_addr[i] = msm_framebuffer_phys(fb, i);
 		if (!layout->plane_addr[i]) {
 			DRM_ERROR("failed to retrieve base addr\n");
 			return -EFAULT;
@@ -1014,7 +1076,7 @@ int sde_format_populate_layout(
 
 	/* Populate the plane sizes etc via get_format */
 	ret = sde_format_get_plane_sizes(layout->format, fb->width, fb->height,
-			layout);
+			layout, fb->pitches);
 	if (ret)
 		return ret;
 
@@ -1118,7 +1180,7 @@ int sde_format_check_modified_format(
 	num_base_fmt_planes = drm_format_num_planes(fmt->base.pixel_format);
 
 	ret = sde_format_get_plane_sizes(fmt, cmd->width, cmd->height,
-			&layout);
+			&layout, cmd->pitches);
 	if (ret)
 		return ret;
 
@@ -1179,21 +1241,23 @@ const struct sde_format *sde_get_sde_format_ext(
 	case DRM_FORMAT_MOD_QCOM_COMPRESSED | DRM_FORMAT_MOD_QCOM_TILE:
 		map = sde_format_map_ubwc;
 		map_size = ARRAY_SIZE(sde_format_map_ubwc);
-		SDE_DEBUG("found fmt 0x%X DRM_FORMAT_MOD_QCOM_COMPRESSED\n",
-				format);
+		SDE_DEBUG("found fmt: %4.4s  DRM_FORMAT_MOD_QCOM_COMPRESSED\n",
+				(char *)&format);
 		break;
 	case DRM_FORMAT_MOD_QCOM_DX:
 		map = sde_format_map_p010;
 		map_size = ARRAY_SIZE(sde_format_map_p010);
-		SDE_DEBUG("found fmt 0x%X DRM_FORMAT_MOD_QCOM_DX\n", format);
+		SDE_DEBUG("found fmt: %4.4s DRM_FORMAT_MOD_QCOM_DX\n",
+				(char *)&format);
 		break;
 	case (DRM_FORMAT_MOD_QCOM_DX | DRM_FORMAT_MOD_QCOM_COMPRESSED):
 	case (DRM_FORMAT_MOD_QCOM_DX | DRM_FORMAT_MOD_QCOM_COMPRESSED |
 			DRM_FORMAT_MOD_QCOM_TILE):
 		map = sde_format_map_p010_ubwc;
 		map_size = ARRAY_SIZE(sde_format_map_p010_ubwc);
-		SDE_DEBUG("found fmt 0x%X DRM_FORMAT_MOD_QCOM_COMPRESSED/DX\n",
-				format);
+		SDE_DEBUG(
+			"found fmt: %4.4s DRM_FORMAT_MOD_QCOM_COMPRESSED/DX\n",
+				(char *)&format);
 		break;
 	case (DRM_FORMAT_MOD_QCOM_DX | DRM_FORMAT_MOD_QCOM_COMPRESSED |
 		DRM_FORMAT_MOD_QCOM_TIGHT):
@@ -1202,26 +1266,28 @@ const struct sde_format *sde_get_sde_format_ext(
 		map = sde_format_map_tp10_ubwc;
 		map_size = ARRAY_SIZE(sde_format_map_tp10_ubwc);
 		SDE_DEBUG(
-			"found fmt 0x%X DRM_FORMAT_MOD_QCOM_COMPRESSED/DX/TIGHT\n",
-			format);
+			"found fmt: %4.4s DRM_FORMAT_MOD_QCOM_COMPRESSED/DX/TIGHT\n",
+				(char *)&format);
 		break;
 	case DRM_FORMAT_MOD_QCOM_TILE:
 		map = sde_format_map_tile;
 		map_size = ARRAY_SIZE(sde_format_map_tile);
-		SDE_DEBUG("found fmt 0x%X DRM_FORMAT_MOD_QCOM_TILE\n", format);
+		SDE_DEBUG("found fmt: %4.4s DRM_FORMAT_MOD_QCOM_TILE\n",
+				(char *)&format);
 		break;
 	case (DRM_FORMAT_MOD_QCOM_TILE | DRM_FORMAT_MOD_QCOM_DX):
 		map = sde_format_map_p010_tile;
 		map_size = ARRAY_SIZE(sde_format_map_p010_tile);
-		SDE_DEBUG("found fmt 0x%X DRM_FORMAT_MOD_QCOM_TILE/DX\n",
-				format);
+		SDE_DEBUG("found fmt: %4.4s DRM_FORMAT_MOD_QCOM_TILE/DX\n",
+				(char *)&format);
 		break;
 	case (DRM_FORMAT_MOD_QCOM_TILE | DRM_FORMAT_MOD_QCOM_DX |
 			DRM_FORMAT_MOD_QCOM_TIGHT):
 		map = sde_format_map_tp10_tile;
 		map_size = ARRAY_SIZE(sde_format_map_tp10_tile);
-		SDE_DEBUG("found fmt 0x%X DRM_FORMAT_MOD_QCOM_TILE/DX/TIGHT\n",
-				format);
+		SDE_DEBUG(
+			"found fmt: %4.4s DRM_FORMAT_MOD_QCOM_TILE/DX/TIGHT\n",
+				(char *)&format);
 		break;
 	default:
 		SDE_ERROR("unsupported format modifier %llX\n", mod0);
@@ -1236,11 +1302,11 @@ const struct sde_format *sde_get_sde_format_ext(
 	}
 
 	if (fmt == NULL)
-		SDE_ERROR("unsupported fmt 0x%X modifier 0x%llX\n",
-				format, mod0);
+		SDE_ERROR("unsupported fmt: %4.4s modifier 0x%llX\n",
+				(char *)&format, mod0);
 	else
-		SDE_DEBUG("fmt %s mod 0x%llX ubwc %d yuv %d\n",
-				drm_get_format_name(format), mod0,
+		SDE_DEBUG("fmt %4.4s mod 0x%llX ubwc %d yuv %d\n",
+				(char *)&format, mod0,
 				SDE_FORMAT_IS_UBWC(fmt),
 				SDE_FORMAT_IS_YUV(fmt));
 

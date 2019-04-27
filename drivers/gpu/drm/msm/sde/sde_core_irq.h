@@ -102,6 +102,19 @@ int sde_core_irq_disable(
 		uint32_t irq_count);
 
 /**
+ * sde_core_irq_disable_nolock - no lock version of sde_core_irq_disable
+ * @sde_kms:		SDE handle
+ * @irq_idx:		Irq index
+ * @return:		0 for success disabling IRQ, otherwise failure
+ *
+ * This function increments count on each enable and decrements on each
+ * disable.  Interrupts is disabled if count is 0 after decrement.
+ */
+int sde_core_irq_disable_nolock(
+		struct sde_kms *sde_kms,
+		int irq_idx);
+
+/**
  * sde_core_irq_read - IRQ helper function for reading IRQ status
  * @sde_kms:		SDE handle
  * @irq_idx:		irq index
@@ -109,6 +122,18 @@ int sde_core_irq_disable(
  * @return:		non-zero if irq detected; otherwise no irq detected
  */
 u32 sde_core_irq_read(
+		struct sde_kms *sde_kms,
+		int irq_idx,
+		bool clear);
+
+/**
+ * sde_core_irq_read - no lock version of sde_core_irq_read
+ * @sde_kms:		SDE handle
+ * @irq_idx:		irq index
+ * @clear:		True to clear the irq after read
+ * @return:		non-zero if irq detected; otherwise no irq detected
+ */
+u32 sde_core_irq_read_nolock(
 		struct sde_kms *sde_kms,
 		int irq_idx,
 		bool clear);
@@ -148,5 +173,20 @@ int sde_core_irq_unregister_callback(
 		struct sde_kms *sde_kms,
 		int irq_idx,
 		struct sde_irq_callback *irq_cb);
+
+/**
+ * sde_debugfs_core_irq_init - register core irq debugfs
+ * @sde_kms: pointer to kms
+ * @parent: debugfs directory root
+ * @Return: 0 on success
+ */
+int sde_debugfs_core_irq_init(struct sde_kms *sde_kms,
+		struct dentry *parent);
+
+/**
+ * sde_debugfs_core_irq_destroy - deregister core irq debugfs
+ * @sde_kms: pointer to kms
+ */
+void sde_debugfs_core_irq_destroy(struct sde_kms *sde_kms);
 
 #endif /* __SDE_CORE_IRQ_H__ */

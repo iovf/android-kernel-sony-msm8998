@@ -14,6 +14,11 @@
  * You should have received a copy of the GNU General Public License along with
  * this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+/*
+ * NOTE: This file has been modified by Sony Mobile Communications Inc.
+ * Modifications are Copyright (c) 2018 Sony Mobile Communications Inc,
+ * and licensed under the license of the file.
+ */
 
 #include "msm_drv.h"
 
@@ -62,11 +67,7 @@ static int msm_fbdev_mmap(struct fb_info *info, struct vm_area_struct *vma)
 	struct drm_fb_helper *helper = (struct drm_fb_helper *)info->par;
 	struct msm_fbdev *fbdev = to_msm_fbdev(helper);
 	struct drm_gem_object *drm_obj = fbdev->bo;
-	struct drm_device *dev = helper->dev;
 	int ret = 0;
-
-	if (drm_device_is_unplugged(dev))
-		return -ENODEV;
 
 	ret = drm_gem_mmap_obj(drm_obj, drm_obj->size, vma);
 	if (ret) {
@@ -85,7 +86,7 @@ static int msm_fbdev_create(struct drm_fb_helper *helper,
 	struct drm_framebuffer *fb = NULL;
 	struct fb_info *fbi = NULL;
 	struct drm_mode_fb_cmd2 mode_cmd = {0};
-	uint64_t paddr;
+	uint32_t paddr;
 	int ret, size;
 
 	DBG("create fbdev: %dx%d@%d (%dx%d)", sizes->surface_width,
@@ -104,8 +105,10 @@ static int msm_fbdev_create(struct drm_fb_helper *helper,
 	/* allocate backing bo */
 	size = mode_cmd.pitches[0] * mode_cmd.height;
 	DBG("allocating %d bytes for fb %d", size, dev->primary->index);
+	mutex_lock(&dev->struct_mutex);
 	fbdev->bo = msm_gem_new(dev, size, MSM_BO_SCANOUT |
 			MSM_BO_WC | MSM_BO_STOLEN);
+	mutex_unlock(&dev->struct_mutex);
 	if (IS_ERR(fbdev->bo)) {
 		ret = PTR_ERR(fbdev->bo);
 		fbdev->bo = NULL;
@@ -119,7 +122,7 @@ static int msm_fbdev_create(struct drm_fb_helper *helper,
 		/* note: if fb creation failed, we can't rely on fb destroy
 		 * to unref the bo:
 		 */
-		drm_gem_object_unreference(fbdev->bo);
+		drm_gem_object_unreference_unlocked(fbdev->bo);
 		ret = PTR_ERR(fb);
 		goto fail;
 	}
@@ -131,7 +134,7 @@ static int msm_fbdev_create(struct drm_fb_helper *helper,
 	 * in panic (ie. lock-safe, etc) we could avoid pinning the
 	 * buffer now:
 	 */
-	ret = msm_gem_get_iova(fbdev->bo, 0, &paddr);
+	ret = msm_gem_get_iova_locked(fbdev->bo, 0, &paddr);
 	if (ret) {
 		dev_err(dev->dev, "failed to get buffer obj iova: %d\n", ret);
 		goto fail_unlock;
@@ -158,12 +161,15 @@ static int msm_fbdev_create(struct drm_fb_helper *helper,
 	drm_fb_helper_fill_fix(fbi, fb->pitches[0], fb->depth);
 	drm_fb_helper_fill_var(fbi, helper, sizes->fb_width, sizes->fb_height);
 
-	/* FIXME: Verify paddr < 32 bits? */
-	dev->mode_config.fb_base = lower_32_bits(paddr);
+	dev->mode_config.fb_base = paddr;
 
-	fbi->screen_base = msm_gem_vaddr(fbdev->bo);
+	fbi->screen_base = msm_gem_get_vaddr_locked(fbdev->bo);
+	if (IS_ERR(fbi->screen_base)) {
+		ret = PTR_ERR(fbi->screen_base);
+		goto fail_unlock;
+	}
 	fbi->screen_size = fbdev->bo->size;
-	fbi->fix.smem_start = lower_32_bits(paddr);
+	fbi->fix.smem_start = paddr;
 	fbi->fix.smem_len = fbdev->bo->size;
 
 	DBG("par=%pK, %dx%d", fbi->par, fbi->var.xres, fbi->var.yres);
@@ -187,21 +193,7 @@ fail:
 	return ret;
 }
 
-static void msm_crtc_fb_gamma_set(struct drm_crtc *crtc,
-		u16 red, u16 green, u16 blue, int regno)
-{
-	DBG("fbdev: set gamma");
-}
-
-static void msm_crtc_fb_gamma_get(struct drm_crtc *crtc,
-		u16 *red, u16 *green, u16 *blue, int regno)
-{
-	DBG("fbdev: get gamma");
-}
-
 static const struct drm_fb_helper_funcs msm_fb_helper_funcs = {
-	.gamma_set = msm_crtc_fb_gamma_set,
-	.gamma_get = msm_crtc_fb_gamma_get,
 	.fb_probe = msm_fbdev_create,
 };
 
@@ -264,6 +256,7 @@ void msm_fbdev_free(struct drm_device *dev)
 
 	/* this will free the backing object */
 	if (fbdev->fb) {
+		msm_gem_put_vaddr(fbdev->bo);
 		drm_framebuffer_unregister_private(fbdev->fb);
 		drm_framebuffer_remove(fbdev->fb);
 	}

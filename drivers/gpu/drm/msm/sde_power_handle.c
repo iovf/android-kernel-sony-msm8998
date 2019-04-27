@@ -25,9 +25,62 @@
 #include <linux/msm-bus.h>
 #include <linux/msm-bus-board.h>
 #include <linux/sde_io_util.h>
+#include <linux/sde_rsc.h>
 
 #include "sde_power_handle.h"
 #include "sde_trace.h"
+#include "sde_dbg.h"
+
+static const char *data_bus_name[SDE_POWER_HANDLE_DBUS_ID_MAX] = {
+	[SDE_POWER_HANDLE_DBUS_ID_MNOC] = "qcom,sde-data-bus",
+	[SDE_POWER_HANDLE_DBUS_ID_LLCC] = "qcom,sde-llcc-bus",
+	[SDE_POWER_HANDLE_DBUS_ID_EBI] = "qcom,sde-ebi-bus",
+};
+
+const char *sde_power_handle_get_dbus_name(u32 bus_id)
+{
+	if (bus_id < SDE_POWER_HANDLE_DBUS_ID_MAX)
+		return data_bus_name[bus_id];
+
+	return NULL;
+}
+
+static void sde_power_event_trigger_locked(struct sde_power_handle *phandle,
+		u32 event_type)
+{
+	struct sde_power_event *event;
+
+	list_for_each_entry(event, &phandle->event_list, list) {
+		if (event->event_type & event_type)
+			event->cb_fnc(event_type, event->usr);
+	}
+}
+
+static int sde_power_rsc_update(struct sde_power_handle *phandle, bool enable)
+{
+	u32 rsc_state;
+	int ret = 0;
+
+	/* creates the rsc client on the first enable */
+	if (!phandle->rsc_client_init) {
+		phandle->rsc_client = sde_rsc_client_create(SDE_RSC_INDEX,
+				"sde_power_handle", false);
+		if (IS_ERR_OR_NULL(phandle->rsc_client)) {
+			pr_debug("sde rsc client create failed :%ld\n",
+						PTR_ERR(phandle->rsc_client));
+			phandle->rsc_client = NULL;
+		}
+		phandle->rsc_client_init = true;
+	}
+
+	rsc_state = enable ? SDE_RSC_CLK_STATE : SDE_RSC_IDLE_STATE;
+
+	if (phandle->rsc_client)
+		ret = sde_rsc_client_state_update(phandle->rsc_client,
+			rsc_state, NULL, SDE_RSC_INVALID_CRTC_ID, NULL);
+
+	return ret;
+}
 
 struct sde_power_client *sde_power_client_create(
 	struct sde_power_handle *phandle, char *client_name)
@@ -48,6 +101,7 @@ struct sde_power_client *sde_power_client_create(
 	strlcpy(client->name, client_name, MAX_CLIENT_NAME_LEN);
 	client->usecase_ndx = VOTE_INDEX_DISABLE;
 	client->id = id;
+	client->active = true;
 	pr_debug("client %s created:%pK id :%d\n", client_name,
 		client, id);
 	id++;
@@ -62,6 +116,9 @@ void sde_power_client_destroy(struct sde_power_handle *phandle,
 {
 	if (!client  || !phandle) {
 		pr_err("reg bus vote: invalid client handle\n");
+	} else if (!client->active) {
+		pr_err("sde power deinit already done\n");
+		kfree(client);
 	} else {
 		pr_debug("bus vote client %s destroyed:%pK id:%u\n",
 			client->name, client, client->id);
@@ -291,6 +348,31 @@ static int _sde_power_data_bus_set_quota(
 		return -EINVAL;
 	}
 
+	pdbus->ab_rt = ab_quota_rt;
+	pdbus->ib_rt = ib_quota_rt;
+	pdbus->ab_nrt = ab_quota_nrt;
+	pdbus->ib_nrt = ib_quota_nrt;
+
+	if (pdbus->enable) {
+		ab_quota_rt = max_t(u64, ab_quota_rt,
+				SDE_POWER_HANDLE_ENABLE_BUS_AB_QUOTA);
+		ib_quota_rt = max_t(u64, ib_quota_rt,
+				SDE_POWER_HANDLE_ENABLE_BUS_IB_QUOTA);
+		ab_quota_nrt = max_t(u64, ab_quota_nrt,
+				SDE_POWER_HANDLE_ENABLE_BUS_AB_QUOTA);
+		ib_quota_nrt = max_t(u64, ib_quota_nrt,
+				SDE_POWER_HANDLE_ENABLE_NRT_BUS_IB_QUOTA);
+	} else {
+		ab_quota_rt = min_t(u64, ab_quota_rt,
+				SDE_POWER_HANDLE_DISABLE_BUS_AB_QUOTA);
+		ib_quota_rt = min_t(u64, ib_quota_rt,
+				SDE_POWER_HANDLE_DISABLE_BUS_IB_QUOTA);
+		ab_quota_nrt = min_t(u64, ab_quota_nrt,
+				SDE_POWER_HANDLE_DISABLE_BUS_AB_QUOTA);
+		ib_quota_nrt = min_t(u64, ib_quota_nrt,
+				SDE_POWER_HANDLE_DISABLE_BUS_IB_QUOTA);
+	}
+
 	if (!ab_quota_rt && !ab_quota_nrt && !ib_quota_rt && !ib_quota_nrt)  {
 		new_uc_idx = 0;
 	} else {
@@ -298,31 +380,30 @@ static int _sde_power_data_bus_set_quota(
 		struct msm_bus_vectors *vect = NULL;
 		struct msm_bus_scale_pdata *bw_table =
 			pdbus->data_bus_scale_table;
-		u32 nrt_axi_port_cnt = pdbus->nrt_axi_port_cnt;
-		u32 total_axi_port_cnt = pdbus->axi_port_cnt;
-		u32 rt_axi_port_cnt = total_axi_port_cnt - nrt_axi_port_cnt;
-		int match_cnt = 0;
+		u32 nrt_data_paths_cnt = pdbus->nrt_data_paths_cnt;
+		u32 total_data_paths_cnt = pdbus->data_paths_cnt;
+		u32 rt_data_paths_cnt = total_data_paths_cnt -
+			nrt_data_paths_cnt;
 
-		if (!bw_table || !total_axi_port_cnt ||
-		    total_axi_port_cnt > MAX_AXI_PORT_COUNT) {
+		if (!bw_table || !total_data_paths_cnt ||
+		    total_data_paths_cnt > MAX_AXI_PORT_COUNT) {
 			pr_err("invalid input\n");
 			return -EINVAL;
 		}
 
-		if (pdbus->bus_channels) {
+		if (nrt_data_paths_cnt) {
+
+			ab_quota_rt = div_u64(ab_quota_rt, rt_data_paths_cnt);
+			ab_quota_nrt = div_u64(ab_quota_nrt,
+						nrt_data_paths_cnt);
+
 			ib_quota_rt = div_u64(ib_quota_rt,
-						pdbus->bus_channels);
+						rt_data_paths_cnt);
 			ib_quota_nrt = div_u64(ib_quota_nrt,
-						pdbus->bus_channels);
-		}
+						nrt_data_paths_cnt);
 
-		if (nrt_axi_port_cnt) {
-
-			ab_quota_rt = div_u64(ab_quota_rt, rt_axi_port_cnt);
-			ab_quota_nrt = div_u64(ab_quota_nrt, nrt_axi_port_cnt);
-
-			for (i = 0; i < total_axi_port_cnt; i++) {
-				if (i < rt_axi_port_cnt) {
+			for (i = 0; i < total_data_paths_cnt; i++) {
+				if (i < rt_data_paths_cnt) {
 					ab_quota[i] = ab_quota_rt;
 					ib_quota[i] = ib_quota_rt;
 				} else {
@@ -332,59 +413,46 @@ static int _sde_power_data_bus_set_quota(
 			}
 		} else {
 			ab_quota[0] = div_u64(ab_quota_rt + ab_quota_nrt,
-					total_axi_port_cnt);
-			ib_quota[0] = ib_quota_rt + ib_quota_nrt;
+					total_data_paths_cnt);
+			ib_quota[0] = div_u64(ib_quota_rt + ib_quota_nrt,
+					total_data_paths_cnt);
 
-			for (i = 1; i < total_axi_port_cnt; i++) {
+			for (i = 1; i < total_data_paths_cnt; i++) {
 				ab_quota[i] = ab_quota[0];
 				ib_quota[i] = ib_quota[0];
 			}
 		}
 
-		for (i = 0; i < total_axi_port_cnt; i++) {
-			vect = &bw_table->usecase
-				[pdbus->curr_bw_uc_idx].vectors[i];
-			/* avoid performing updates for small changes */
-			if ((ab_quota[i] == vect->ab) &&
-				(ib_quota[i] == vect->ib))
-				match_cnt++;
-		}
-
-		if (match_cnt == total_axi_port_cnt) {
-			pr_debug("skip BW vote\n");
-			return 0;
-		}
-
 		new_uc_idx = (pdbus->curr_bw_uc_idx %
 			(bw_table->num_usecases - 1)) + 1;
 
-		for (i = 0; i < total_axi_port_cnt; i++) {
+		for (i = 0; i < total_data_paths_cnt; i++) {
 			vect = &bw_table->usecase[new_uc_idx].vectors[i];
 			vect->ab = ab_quota[i];
 			vect->ib = ib_quota[i];
 
-			pr_debug("uc_idx=%d %s path idx=%d ab=%llu ib=%llu\n",
-				new_uc_idx, (i < rt_axi_port_cnt) ? "rt" : "nrt"
-				, i, vect->ab, vect->ib);
+			pr_debug(
+				"%s uc_idx=%d %s path idx=%d ab=%llu ib=%llu\n",
+				bw_table->name,
+				new_uc_idx, (i < rt_data_paths_cnt) ?
+				"rt" : "nrt", i, vect->ab, vect->ib);
 		}
 	}
 	pdbus->curr_bw_uc_idx = new_uc_idx;
 	pdbus->ao_bw_uc_idx = new_uc_idx;
 
-	if ((pdbus->bus_ref_cnt == 0) && pdbus->curr_bw_uc_idx) {
-		rc = 0;
-	} else { /* vote BW if bus_bw_cnt > 0 or uc_idx is zero */
-		SDE_ATRACE_BEGIN("msm_bus_scale_req");
-		rc = msm_bus_scale_client_update_request(pdbus->data_bus_hdl,
+	SDE_ATRACE_BEGIN("msm_bus_scale_req");
+	rc = msm_bus_scale_client_update_request(pdbus->data_bus_hdl,
 			new_uc_idx);
-		SDE_ATRACE_END("msm_bus_scale_req");
-	}
+	SDE_ATRACE_END("msm_bus_scale_req");
+
 	return rc;
 }
 
 int sde_power_data_bus_set_quota(struct sde_power_handle *phandle,
 		struct sde_power_client *pclient,
-		int bus_client, u64 ab_quota, u64 ib_quota)
+		int bus_client, u32 bus_id,
+		u64 ab_quota, u64 ib_quota)
 {
 	int rc = 0;
 	int i;
@@ -393,7 +461,8 @@ int sde_power_data_bus_set_quota(struct sde_power_handle *phandle,
 	struct sde_power_client *client;
 
 	if (!phandle || !pclient ||
-			bus_client >= SDE_POWER_HANDLE_DATA_BUS_CLIENT_MAX) {
+			bus_client >= SDE_POWER_HANDLE_DATA_BUS_CLIENT_MAX ||
+			bus_id >= SDE_POWER_HANDLE_DBUS_ID_MAX) {
 		pr_err("invalid parameters\n");
 		return -EINVAL;
 	}
@@ -402,7 +471,7 @@ int sde_power_data_bus_set_quota(struct sde_power_handle *phandle,
 
 	pclient->ab[bus_client] = ab_quota;
 	pclient->ib[bus_client] = ib_quota;
-	trace_sde_perf_update_bus(bus_client, ab_quota, ib_quota);
+	trace_sde_perf_update_bus(bus_client, bus_id, ab_quota, ib_quota);
 
 	list_for_each_entry(client, &phandle->power_client_clist, list) {
 		for (i = 0; i < SDE_POWER_HANDLE_DATA_BUS_CLIENT_MAX; i++) {
@@ -416,7 +485,9 @@ int sde_power_data_bus_set_quota(struct sde_power_handle *phandle,
 		}
 	}
 
-	rc = _sde_power_data_bus_set_quota(&phandle->data_bus_handle,
+	if (phandle->data_bus_handle[bus_id].data_bus_hdl)
+		rc = _sde_power_data_bus_set_quota(
+			&phandle->data_bus_handle[bus_id],
 			total_ab_rt, total_ab_nrt,
 			total_ib_rt, total_ib_nrt);
 
@@ -435,7 +506,7 @@ static void sde_power_data_bus_unregister(
 }
 
 static int sde_power_data_bus_parse(struct platform_device *pdev,
-	struct sde_power_data_bus_handle *pdbus)
+	struct sde_power_data_bus_handle *pdbus, const char *name)
 {
 	struct device_node *node;
 	int rc = 0;
@@ -449,16 +520,16 @@ static int sde_power_data_bus_parse(struct platform_device *pdev,
 		rc = 0;
 	}
 
-	pdbus->nrt_axi_port_cnt = 0;
+	pdbus->nrt_data_paths_cnt = 0;
 	rc = of_property_read_u32(pdev->dev.of_node,
 			"qcom,sde-num-nrt-paths",
-			&pdbus->nrt_axi_port_cnt);
+			&pdbus->nrt_data_paths_cnt);
 	if (rc) {
 		pr_debug("number of axi port property not specified\n");
 		rc = 0;
 	}
 
-	node = of_get_child_by_name(pdev->dev.of_node, "qcom,sde-data-bus");
+	node = of_get_child_by_name(pdev->dev.of_node, name);
 	if (node) {
 		rc = of_property_read_u32(node,
 				"qcom,msm-bus,num-paths", &paths);
@@ -466,13 +537,15 @@ static int sde_power_data_bus_parse(struct platform_device *pdev,
 			pr_err("Error. qcom,msm-bus,num-paths not found\n");
 			return rc;
 		}
-		pdbus->axi_port_cnt = paths;
+		pdbus->data_paths_cnt = paths;
 
 		pdbus->data_bus_scale_table =
 				msm_bus_pdata_from_node(pdev, node);
 		if (IS_ERR_OR_NULL(pdbus->data_bus_scale_table)) {
 			pr_err("reg bus handle parsing failed\n");
 			rc = PTR_ERR(pdbus->data_bus_scale_table);
+			if (!pdbus->data_bus_scale_table)
+				rc = -EINVAL;
 			goto end;
 		}
 		pdbus->data_bus_hdl = msm_bus_scale_register_client(
@@ -482,19 +555,8 @@ static int sde_power_data_bus_parse(struct platform_device *pdev,
 			rc = -EINVAL;
 			goto end;
 		}
-		pr_debug("register data_bus_hdl=%x\n", pdbus->data_bus_hdl);
-
-		/*
-		 * Following call will not result in actual vote rather update
-		 * the current index and ab/ib value. When continuous splash
-		 * is enabled, actual vote will happen when splash handoff is
-		 * done.
-		 */
-		return _sde_power_data_bus_set_quota(pdbus,
-				SDE_POWER_HANDLE_DATA_BUS_AB_QUOTA,
-				SDE_POWER_HANDLE_DATA_BUS_AB_QUOTA,
-				SDE_POWER_HANDLE_DATA_BUS_IB_QUOTA,
-				SDE_POWER_HANDLE_DATA_BUS_IB_QUOTA);
+		pr_debug("register %s data_bus_hdl=%x\n", name,
+				pdbus->data_bus_hdl);
 	}
 
 end:
@@ -514,6 +576,8 @@ static int sde_power_reg_bus_parse(struct platform_device *pdev,
 		if (IS_ERR_OR_NULL(bus_scale_table)) {
 			pr_err("reg bus handle parsing failed\n");
 			rc = PTR_ERR(bus_scale_table);
+			if (!bus_scale_table)
+				rc = -EINVAL;
 			goto end;
 		}
 		phandle->reg_bus_hdl = msm_bus_scale_register_client(
@@ -536,6 +600,41 @@ static void sde_power_reg_bus_unregister(u32 reg_bus_hdl)
 		msm_bus_scale_unregister_client(reg_bus_hdl);
 }
 
+int sde_power_data_bus_state_update(struct sde_power_handle *phandle,
+							bool enable)
+{
+	int i;
+
+	if (!phandle) {
+		pr_err("invalid param\n");
+		return -EINVAL;
+	}
+
+	for (i = SDE_POWER_HANDLE_DBUS_ID_MNOC;
+			i < SDE_POWER_HANDLE_DBUS_ID_MAX; i++)
+		phandle->data_bus_handle[i].enable = enable;
+
+	return 0;
+}
+
+static int sde_power_data_bus_update(struct sde_power_data_bus_handle *pdbus,
+							bool enable)
+{
+	int rc = 0;
+
+	pdbus->enable = enable;
+
+	if (pdbus->data_bus_hdl)
+		rc = _sde_power_data_bus_set_quota(pdbus, pdbus->ab_rt,
+				pdbus->ab_nrt, pdbus->ib_rt, pdbus->ib_nrt);
+
+	if (rc)
+		pr_err("failed to set data bus vote rc=%d enable:%d\n",
+							rc, enable);
+
+	return rc;
+}
+
 static int sde_power_reg_bus_update(u32 reg_bus_hdl, u32 usecase_ndx)
 {
 	int rc = 0;
@@ -550,7 +649,7 @@ static int sde_power_reg_bus_update(u32 reg_bus_hdl, u32 usecase_ndx)
 }
 #else
 static int sde_power_data_bus_parse(struct platform_device *pdev,
-	struct sde_power_data_bus_handle *pdbus)
+		struct sde_power_data_bus_handle *pdbus, const char *name)
 {
 	return 0;
 }
@@ -562,7 +661,8 @@ static void sde_power_data_bus_unregister(
 
 int sde_power_data_bus_set_quota(struct sde_power_handle *phandle,
 		struct sde_power_client *pclient,
-		int bus_client, u64 ab_quota, u64 ib_quota)
+		int bus_client, u32 bus_id,
+		u64 ab_quota, u64 ib_quota)
 {
 	return 0;
 }
@@ -581,63 +681,24 @@ static int sde_power_reg_bus_update(u32 reg_bus_hdl, u32 usecase_ndx)
 {
 	return 0;
 }
-#endif
 
-void sde_power_data_bus_bandwidth_ctrl(struct sde_power_handle *phandle,
-		struct sde_power_client *pclient, int enable)
+static int sde_power_data_bus_update(struct sde_power_data_bus_handle *pdbus,
+							bool enable)
 {
-	struct sde_power_data_bus_handle *pdbus;
-	int changed = 0;
-
-	if (!phandle || !pclient) {
-		pr_err("invalid power/client handle\n");
-		return;
-	}
-
-	pdbus = &phandle->data_bus_handle;
-
-	mutex_lock(&phandle->phandle_lock);
-	if (enable) {
-		if (pdbus->bus_ref_cnt == 0)
-			changed++;
-		pdbus->bus_ref_cnt++;
-	} else {
-		if (pdbus->bus_ref_cnt) {
-			pdbus->bus_ref_cnt--;
-			if (pdbus->bus_ref_cnt == 0)
-				changed++;
-		} else {
-			pr_debug("Can not be turned off\n");
-		}
-	}
-
-	pr_debug("%pS: task:%s bw_cnt=%d changed=%d enable=%d\n",
-		__builtin_return_address(0), current->group_leader->comm,
-		pdbus->bus_ref_cnt, changed, enable);
-
-	if (changed) {
-		SDE_ATRACE_INT("data_bus_ctrl", enable);
-
-		if (!enable) {
-			if (!pdbus->handoff_pending) {
-				msm_bus_scale_client_update_request(
-						pdbus->data_bus_hdl, 0);
-				pdbus->ao_bw_uc_idx = 0;
-			}
-		} else {
-			msm_bus_scale_client_update_request(
-					pdbus->data_bus_hdl,
-					pdbus->curr_bw_uc_idx);
-		}
-	}
-
-	mutex_unlock(&phandle->phandle_lock);
+	return 0;
 }
+
+int sde_power_data_bus_state_update(struct sde_power_handle *phandle,
+							bool enable)
+{
+	return 0;
+}
+#endif
 
 int sde_power_resource_init(struct platform_device *pdev,
 	struct sde_power_handle *phandle)
 {
-	int rc = 0;
+	int rc = 0, i;
 	struct dss_module_power *mp;
 
 	if (!phandle || !pdev) {
@@ -685,28 +746,43 @@ int sde_power_resource_init(struct platform_device *pdev,
 		goto bus_err;
 	}
 
-	rc = sde_power_data_bus_parse(pdev, &phandle->data_bus_handle);
-	if (rc) {
-		pr_err("register data bus parse failed rc=%d\n", rc);
-		goto data_bus_err;
+	for (i = SDE_POWER_HANDLE_DBUS_ID_MNOC;
+			i < SDE_POWER_HANDLE_DBUS_ID_MAX; i++) {
+		rc = sde_power_data_bus_parse(pdev,
+				&phandle->data_bus_handle[i],
+				data_bus_name[i]);
+		if (rc) {
+			pr_err("register data bus parse failed id=%d rc=%d\n",
+					i, rc);
+			goto data_bus_err;
+		}
 	}
 
 	INIT_LIST_HEAD(&phandle->power_client_clist);
+	INIT_LIST_HEAD(&phandle->event_list);
+
+	phandle->rsc_client = NULL;
+	phandle->rsc_client_init = false;
+
 	mutex_init(&phandle->phandle_lock);
 
 	return rc;
 
 data_bus_err:
+	for (i--; i >= 0; i--)
+		sde_power_data_bus_unregister(&phandle->data_bus_handle[i]);
 	sde_power_reg_bus_unregister(phandle->reg_bus_hdl);
 bus_err:
 	msm_dss_put_clk(mp->clk_config, mp->num_clk);
 clk_err:
 	msm_dss_config_vreg(&pdev->dev, mp->vreg_config, mp->num_vreg, 0);
 vreg_err:
-	devm_kfree(&pdev->dev, mp->vreg_config);
+	if (mp->vreg_config)
+		devm_kfree(&pdev->dev, mp->vreg_config);
 	mp->num_vreg = 0;
 parse_vreg_err:
-	devm_kfree(&pdev->dev, mp->clk_config);
+	if (mp->clk_config)
+		devm_kfree(&pdev->dev, mp->clk_config);
 	mp->num_clk = 0;
 end:
 	return rc;
@@ -716,6 +792,9 @@ void sde_power_resource_deinit(struct platform_device *pdev,
 	struct sde_power_handle *phandle)
 {
 	struct dss_module_power *mp;
+	struct sde_power_client *curr_client, *next_client;
+	struct sde_power_event *curr_event, *next_event;
+	int i;
 
 	if (!phandle || !pdev) {
 		pr_err("invalid input param\n");
@@ -723,7 +802,28 @@ void sde_power_resource_deinit(struct platform_device *pdev,
 	}
 	mp = &phandle->mp;
 
-	sde_power_data_bus_unregister(&phandle->data_bus_handle);
+	mutex_lock(&phandle->phandle_lock);
+	list_for_each_entry_safe(curr_client, next_client,
+			&phandle->power_client_clist, list) {
+		pr_err("cliend:%s-%d still registered with refcount:%d\n",
+				curr_client->name, curr_client->id,
+				curr_client->refcount);
+		curr_client->active = false;
+		list_del(&curr_client->list);
+	}
+
+	list_for_each_entry_safe(curr_event, next_event,
+			&phandle->event_list, list) {
+		pr_err("event:%d, client:%s still registered\n",
+				curr_event->event_type,
+				curr_event->client_name);
+		curr_event->active = false;
+		list_del(&curr_event->list);
+	}
+	mutex_unlock(&phandle->phandle_lock);
+
+	for (i = 0; i < SDE_POWER_HANDLE_DBUS_ID_MAX; i++)
+		sde_power_data_bus_unregister(&phandle->data_bus_handle[i]);
 
 	sde_power_reg_bus_unregister(phandle->reg_bus_hdl);
 
@@ -739,12 +839,77 @@ void sde_power_resource_deinit(struct platform_device *pdev,
 
 	mp->num_vreg = 0;
 	mp->num_clk = 0;
+
+	if (phandle->rsc_client)
+		sde_rsc_client_destroy(phandle->rsc_client);
+}
+
+
+int sde_power_scale_reg_bus(struct sde_power_handle *phandle,
+	struct sde_power_client *pclient, u32 usecase_ndx, bool skip_lock)
+{
+	struct sde_power_client *client;
+	int rc = 0;
+	u32 max_usecase_ndx = VOTE_INDEX_DISABLE;
+
+	if (!skip_lock) {
+		mutex_lock(&phandle->phandle_lock);
+
+		if (WARN_ON(pclient->refcount == 0)) {
+			/*
+			 * This is not expected, clients calling without skip
+			 * lock are outside the power resource enable, which
+			 * means that they should have enabled the power
+			 * resource before trying to scale.
+			 */
+			rc = -EINVAL;
+			goto exit;
+		}
+	}
+
+	pr_debug("%pS: current idx:%d requested:%d client:%d\n",
+		__builtin_return_address(0), pclient->usecase_ndx,
+		usecase_ndx, pclient->id);
+
+	pclient->usecase_ndx = usecase_ndx;
+
+	list_for_each_entry(client, &phandle->power_client_clist, list) {
+		if (client->usecase_ndx < VOTE_INDEX_MAX &&
+		    client->usecase_ndx > max_usecase_ndx)
+			max_usecase_ndx = client->usecase_ndx;
+	}
+
+	rc = sde_power_reg_bus_update(phandle->reg_bus_hdl,
+						max_usecase_ndx);
+	if (rc)
+		pr_err("failed to set reg bus vote rc=%d\n", rc);
+
+exit:
+	if (!skip_lock)
+		mutex_unlock(&phandle->phandle_lock);
+
+	return rc;
+}
+
+static inline bool _resource_changed(u32 current_usecase_ndx,
+		u32 max_usecase_ndx)
+{
+	WARN_ON((current_usecase_ndx >= VOTE_INDEX_MAX)
+		|| (max_usecase_ndx >= VOTE_INDEX_MAX));
+
+	if (((current_usecase_ndx >= VOTE_INDEX_LOW) && /*current enabled */
+		(max_usecase_ndx == VOTE_INDEX_DISABLE)) || /* max disabled */
+		((current_usecase_ndx == VOTE_INDEX_DISABLE) && /* disabled */
+		(max_usecase_ndx >= VOTE_INDEX_LOW))) /* max enabled */
+		return true;
+
+	return false;
 }
 
 int sde_power_resource_enable(struct sde_power_handle *phandle,
 	struct sde_power_client *pclient, bool enable)
 {
-	int rc = 0;
+	int rc = 0, i;
 	bool changed = false;
 	u32 max_usecase_ndx = VOTE_INDEX_DISABLE, prev_usecase_ndx;
 	struct sde_power_client *client;
@@ -774,7 +939,15 @@ int sde_power_resource_enable(struct sde_power_handle *phandle,
 			max_usecase_ndx = client->usecase_ndx;
 	}
 
-	if (phandle->current_usecase_ndx != max_usecase_ndx) {
+	/*
+	 * Check if we need to enable/disable the power resource, we won't
+	 * only-scale up/down the AHB vote in this API; if a client wants to
+	 * bump up the AHB clock above the LOW (default) level, it needs to
+	 * call 'sde_power_scale_reg_bus' with the desired vote after the power
+	 * resource was enabled.
+	 */
+	if (_resource_changed(phandle->current_usecase_ndx,
+			max_usecase_ndx)) {
 		changed = true;
 		prev_usecase_ndx = phandle->current_usecase_ndx;
 		phandle->current_usecase_ndx = max_usecase_ndx;
@@ -788,45 +961,111 @@ int sde_power_resource_enable(struct sde_power_handle *phandle,
 		goto end;
 
 	if (enable) {
-		rc = msm_dss_enable_vreg(mp->vreg_config, mp->num_vreg, enable);
-		if (rc) {
-			pr_err("failed to enable vregs rc=%d\n", rc);
-			goto vreg_err;
+		sde_power_event_trigger_locked(phandle,
+				SDE_POWER_EVENT_PRE_ENABLE);
+
+		for (i = 0; i < SDE_POWER_HANDLE_DBUS_ID_MAX; i++) {
+			rc = sde_power_data_bus_update(
+					&phandle->data_bus_handle[i], enable);
+			if (rc) {
+				pr_err("failed to set data bus vote id=%d rc=%d\n",
+						i, rc);
+				goto data_bus_hdl_err;
+			}
+		}
+		/*
+		 * - When the target is RSCC enabled, regulator should
+		 *   be enabled by the s/w only for the first time during
+		 *   bootup. After that, RSCC hardware takes care of enabling/
+		 *   disabling it.
+		 * - When the target is not RSCC enabled, regulator should
+		 *   be totally handled by the software.
+		 */
+		if (!phandle->rsc_client) {
+			rc = msm_dss_enable_vreg(mp->vreg_config, mp->num_vreg,
+									enable);
+			if (rc) {
+				pr_err("failed to enable vregs rc=%d\n", rc);
+				goto vreg_err;
+			}
 		}
 
-		rc = sde_power_reg_bus_update(phandle->reg_bus_hdl,
-							max_usecase_ndx);
+		rc = sde_power_scale_reg_bus(phandle, pclient,
+				max_usecase_ndx, true);
 		if (rc) {
 			pr_err("failed to set reg bus vote rc=%d\n", rc);
 			goto reg_bus_hdl_err;
 		}
 
+		rc = sde_power_rsc_update(phandle, true);
+		if (rc) {
+			pr_err("failed to update rsc\n");
+			goto rsc_err;
+		}
+
+		SDE_EVT32_VERBOSE(enable, SDE_EVTLOG_FUNC_CASE1);
 		rc = msm_dss_enable_clk(mp->clk_config, mp->num_clk, enable);
 		if (rc) {
 			pr_err("clock enable failed rc:%d\n", rc);
 			goto clk_err;
 		}
+
+		sde_power_event_trigger_locked(phandle,
+				SDE_POWER_EVENT_POST_ENABLE);
+
 	} else {
+		sde_power_event_trigger_locked(phandle,
+				SDE_POWER_EVENT_PRE_DISABLE);
+
+		SDE_EVT32_VERBOSE(enable, SDE_EVTLOG_FUNC_CASE2);
 		msm_dss_enable_clk(mp->clk_config, mp->num_clk, enable);
 
-		sde_power_reg_bus_update(phandle->reg_bus_hdl,
-							max_usecase_ndx);
+		sde_power_rsc_update(phandle, false);
 
-		msm_dss_enable_vreg(mp->vreg_config, mp->num_vreg, enable);
+		sde_power_scale_reg_bus(phandle, pclient,
+				max_usecase_ndx, true);
+
+		if (!phandle->rsc_client)
+			msm_dss_enable_vreg(mp->vreg_config, mp->num_vreg,
+									enable);
+		for (i = 0 ; i < SDE_POWER_HANDLE_DBUS_ID_MAX; i++)
+			sde_power_data_bus_update(&phandle->data_bus_handle[i],
+					enable);
+
+		sde_power_event_trigger_locked(phandle,
+				SDE_POWER_EVENT_POST_DISABLE);
 	}
 
 end:
+	SDE_EVT32_VERBOSE(enable, SDE_EVTLOG_FUNC_EXIT);
 	mutex_unlock(&phandle->phandle_lock);
+
 	return rc;
 
 clk_err:
-	sde_power_reg_bus_update(phandle->reg_bus_hdl, prev_usecase_ndx);
+	sde_power_rsc_update(phandle, false);
+rsc_err:
+	sde_power_scale_reg_bus(phandle, pclient, max_usecase_ndx, true);
 reg_bus_hdl_err:
-	msm_dss_enable_vreg(mp->vreg_config, mp->num_vreg, 0);
+	if (!phandle->rsc_client)
+		msm_dss_enable_vreg(mp->vreg_config, mp->num_vreg, 0);
 vreg_err:
+	for (i = 0 ; i < SDE_POWER_HANDLE_DBUS_ID_MAX; i++)
+		sde_power_data_bus_update(&phandle->data_bus_handle[i], 0);
+data_bus_hdl_err:
 	phandle->current_usecase_ndx = prev_usecase_ndx;
 	mutex_unlock(&phandle->phandle_lock);
 	return rc;
+}
+
+int sde_power_resource_is_enabled(struct sde_power_handle *phandle)
+{
+	if (!phandle) {
+		pr_err("invalid input argument\n");
+		return false;
+	}
+
+	return phandle->current_usecase_ndx != VOTE_INDEX_DISABLE;
 }
 
 int sde_power_clk_set_rate(struct sde_power_handle *phandle, char *clock_name,
@@ -922,4 +1161,53 @@ struct clk *sde_power_clk_get_clk(struct sde_power_handle *phandle,
 	}
 
 	return clk;
+}
+
+struct sde_power_event *sde_power_handle_register_event(
+		struct sde_power_handle *phandle,
+		u32 event_type, void (*cb_fnc)(u32 event_type, void *usr),
+		void *usr, char *client_name)
+{
+	struct sde_power_event *event;
+
+	if (!phandle) {
+		pr_err("invalid power handle\n");
+		return ERR_PTR(-EINVAL);
+	} else if (!cb_fnc || !event_type) {
+		pr_err("no callback fnc or event type\n");
+		return ERR_PTR(-EINVAL);
+	}
+
+	event = kzalloc(sizeof(struct sde_power_event), GFP_KERNEL);
+	if (!event)
+		return ERR_PTR(-ENOMEM);
+
+	event->event_type = event_type;
+	event->cb_fnc = cb_fnc;
+	event->usr = usr;
+	strlcpy(event->client_name, client_name, MAX_CLIENT_NAME_LEN);
+	event->active = true;
+
+	mutex_lock(&phandle->phandle_lock);
+	list_add(&event->list, &phandle->event_list);
+	mutex_unlock(&phandle->phandle_lock);
+
+	return event;
+}
+
+void sde_power_handle_unregister_event(
+		struct sde_power_handle *phandle,
+		struct sde_power_event *event)
+{
+	if (!phandle || !event) {
+		pr_err("invalid phandle or event\n");
+	} else if (!event->active) {
+		pr_err("power handle deinit already done\n");
+		kfree(event);
+	} else {
+		mutex_lock(&phandle->phandle_lock);
+		list_del_init(&event->list);
+		mutex_unlock(&phandle->phandle_lock);
+		kfree(event);
+	}
 }

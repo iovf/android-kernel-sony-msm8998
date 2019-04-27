@@ -1,4 +1,4 @@
-/* Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -8,6 +8,11 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
+ */
+/*
+ * NOTE: This file has been modified by Sony Mobile Communications Inc.
+ * Modifications are Copyright (c) 2018 Sony Mobile Communications Inc,
+ * and licensed under the license of the file.
  */
 
 #ifndef _SDE_HWIO_H
@@ -40,6 +45,8 @@
 #define PPB0_CONFIG                     0x334
 #define PPB1_CNTL                       0x338
 #define PPB1_CONFIG                     0x33C
+#define PPB2_CNTL                       0x370
+#define PPB3_CNTL                       0x374
 #define HW_EVENTS_CTL                   0x37C
 #define CLK_CTRL3                       0x3A8
 #define CLK_STATUS3                     0x3AC
@@ -52,6 +59,7 @@
 #define SPLIT_DISPLAY_LOWER_PIPE_CTRL   0x3F0
 #define SPLIT_DISPLAY_TE_LINE_INTERVAL  0x3F4
 #define INTF_SW_RESET_MASK              0x3FC
+#define HDMI_DP_CORE_SELECT             0x408
 #define MDP_OUT_CTL_0                   0x410
 #define MDP_VSYNC_SEL                   0x414
 #define DCE_SEL                         0x450

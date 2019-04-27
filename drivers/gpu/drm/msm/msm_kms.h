@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2017, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
  * Copyright (C) 2013 Red Hat
  * Author: Rob Clark <robdclark@gmail.com>
  *
@@ -34,24 +34,10 @@
 #define MSM_MODE_FLAG_SEAMLESS_DYNAMIC_FPS	(1<<0)
 /* Transition to new mode requires a wait-for-vblank before the modeset */
 #define MSM_MODE_FLAG_VBLANK_PRE_MODESET	(1<<1)
-/*
- * We need setting some flags in bridge, and using them in encoder. Add them in
- * private_flags would be better for use. DRM_MODE_FLAG_SUPPORTS_RGB/YUV are
- * flags that indicating the SINK supported color formats read from EDID. While,
- * these flags defined here indicate the best color/bit depth foramt we choosed
- * that would be better for display. For example the best mode display like:
- * RGB+RGB_DC,YUV+YUV_DC, RGB,YUV. And we could not set RGB and YUV format at
- * the same time. And also RGB_DC only set when RGB format is set,the same for
- * YUV_DC.
- */
-/* Enable RGB444 30 bit deep color */
-#define MSM_MODE_FLAG_RGB444_DC_ENABLE		(1<<2)
-/* Enable YUV420 30 bit deep color */
-#define MSM_MODE_FLAG_YUV420_DC_ENABLE		(1<<3)
-/* Choose RGB444 format to display */
-#define MSM_MODE_FLAG_COLOR_FORMAT_RGB444	(1<<4)
-/* Choose YUV420 format to display */
-#define MSM_MODE_FLAG_COLOR_FORMAT_YCBCR420	(1<<5)
+/* Request to switch the connector mode */
+#define MSM_MODE_FLAG_SEAMLESS_DMS			(1<<2)
+/* Request to switch the fps */
+#define MSM_MODE_FLAG_SEAMLESS_VRR			(1<<3)
 
 /* As there are different display controller blocks depending on the
  * snapdragon version, the kms support is split out and the appropriate
@@ -80,6 +66,9 @@ struct msm_kms_funcs {
 	/* functions to wait for atomic commit completed on each CRTC */
 	void (*wait_for_crtc_commit_done)(struct msm_kms *kms,
 					struct drm_crtc *crtc);
+	/* function pointer to wait for pixel transfer to panel to complete*/
+	void (*wait_for_tx_complete)(struct msm_kms *kms,
+					struct drm_crtc *crtc);
 	/* get msm_format w/ optional format modifiers from drm_mode_fb_cmd2 */
 	const struct msm_format *(*get_format)(struct msm_kms *kms,
 					const uint32_t format,
@@ -90,6 +79,9 @@ struct msm_kms_funcs {
 			const struct msm_format *msm_fmt,
 			const struct drm_mode_fb_cmd2 *cmd,
 			struct drm_gem_object **bos);
+	/* perform complete atomic check of given atomic state */
+	int (*atomic_check)(struct msm_kms *kms,
+			struct drm_atomic_state *state);
 	/* misc: */
 	long (*round_pixclk)(struct msm_kms *kms, unsigned long rate,
 			struct drm_encoder *encoder);
@@ -98,20 +90,31 @@ struct msm_kms_funcs {
 			struct drm_encoder *slave_encoder,
 			bool is_cmd_mode);
 	void (*postopen)(struct msm_kms *kms, struct drm_file *file);
-	/* cleanup: */
 	void (*preclose)(struct msm_kms *kms, struct drm_file *file);
 	void (*postclose)(struct msm_kms *kms, struct drm_file *file);
 	void (*lastclose)(struct msm_kms *kms);
+	int (*register_events)(struct msm_kms *kms,
+			struct drm_mode_object *obj, u32 event, bool en);
+	/* pm suspend/resume hooks */
+	int (*pm_suspend)(struct device *dev);
+	int (*pm_resume)(struct device *dev);
+	/* cleanup: */
 	void (*destroy)(struct msm_kms *kms);
+	/* get address space */
+	struct msm_gem_address_space *(*get_address_space)(
+			struct msm_kms *kms,
+			unsigned int domain);
+	/* handle continuous splash  */
+	int (*cont_splash_config)(struct msm_kms *kms);
+	/* check for continuous splash status */
+	bool (*check_for_splash)(struct msm_kms *kms);
 };
 
 struct msm_kms {
 	const struct msm_kms_funcs *funcs;
 
-	/* irq handling: */
-	bool in_irq;
-	struct list_head irq_list;    /* list of mdp4_irq */
-	uint32_t vblank_mask;         /* irq bits set for userspace vblank */
+	/* irq number to be passed on to drm_irq_install */
+	int irq;
 };
 
 static inline void msm_kms_init(struct msm_kms *kms,
@@ -126,7 +129,24 @@ struct msm_kms *mdp4_kms_init(struct drm_device *dev);
 static inline
 struct msm_kms *mdp4_kms_init(struct drm_device *dev) { return NULL; };
 #endif
+
+#ifdef CONFIG_DRM_MSM_MDP5
+int msm_mdss_init(struct drm_device *dev);
+void msm_mdss_destroy(struct drm_device *dev);
 struct msm_kms *mdp5_kms_init(struct drm_device *dev);
+#else
+static inline int msm_mdss_init(struct drm_device *dev)
+{
+	return 0;
+}
+static inline void msm_mdss_destroy(struct drm_device *dev)
+{
+}
+static inline struct msm_kms *mdp5_kms_init(struct drm_device *dev)
+{
+	return NULL;
+}
+#endif
 struct msm_kms *sde_kms_init(struct drm_device *dev);
 
 /**
@@ -137,10 +157,22 @@ static inline bool msm_is_mode_seamless(const struct drm_display_mode *mode)
 	return (mode->flags & DRM_MODE_FLAG_SEAMLESS);
 }
 
+static inline bool msm_is_mode_seamless_dms(const struct drm_display_mode *mode)
+{
+	return mode ? (mode->private_flags & MSM_MODE_FLAG_SEAMLESS_DMS)
+		: false;
+}
+
 static inline bool msm_is_mode_dynamic_fps(const struct drm_display_mode *mode)
 {
 	return ((mode->flags & DRM_MODE_FLAG_SEAMLESS) &&
 		(mode->private_flags & MSM_MODE_FLAG_SEAMLESS_DYNAMIC_FPS));
+}
+
+static inline bool msm_is_mode_seamless_vrr(const struct drm_display_mode *mode)
+{
+	return mode ? (mode->private_flags & MSM_MODE_FLAG_SEAMLESS_VRR)
+		: false;
 }
 
 static inline bool msm_needs_vblank_pre_modeset(

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -32,8 +32,6 @@
 
 #define SDE_CEA_EXT    0x02
 #define SDE_EXTENDED_TAG 0x07
-
-#define MIN_SCRAMBLER_REQ_RATE 340000
 
 #define SDE_DRM_MODE_FLAG_FMT_MASK (0x3 << 20)
 
@@ -138,6 +136,14 @@ void sde_free_edid(void **edid_ctrl);
  * Return: error code.
  */
 bool sde_detect_hdmi_monitor(void *edid_ctrl);
+
+/**
+ * sde_get_edid_checksum() - return the checksum of last block of EDID.
+ * @input:     Handle to the edid_ctrl structure.
+ *
+ * Return: checksum of the last EDID block.
+ */
+u8 sde_get_edid_checksum(void *input);
 
 /**
  * _sde_edid_update_modes() - populate EDID modes.
