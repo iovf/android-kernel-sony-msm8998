@@ -1296,7 +1296,7 @@ static int check_version(Elf_Shdr *sechdrs,
 	struct modversion_info *versions;
 	if(!strncmp("rdbg", mod->name, 4))
 		return 1;
-	if(!strncmp("ufs_test", mod->name, 4))
+	if(!strncmp("ufs_test", mod->name, 8))
 		return 1;
 	if(!strncmp("test_iosched", mod->name, 4))
 		return 1;
