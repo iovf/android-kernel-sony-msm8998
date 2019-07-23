@@ -64,8 +64,6 @@ uint32_t sde_populate_formats(
  * @w:               width of the buffer
  * @h:               height of the buffer
  * @layout:          layout of the buffer
- * @pitches:         array of size [SDE_MAX_PLANES] to populate
- *		     pitch for each plane
  *
  * Return: size of the buffer
  */
@@ -73,20 +71,7 @@ int sde_format_get_plane_sizes(
 		const struct sde_format *fmt,
 		const uint32_t w,
 		const uint32_t h,
-		struct sde_hw_fmt_layout *layout,
-		const uint32_t *pitches);
-
-/**
- * sde_format_get_block_size - get block size of given format when
- *	operating in block mode
- * @fmt:             pointer to sde_format
- * @w:               pointer to width of the block
- * @h:               pointer to height of the block
- *
- * Return: 0 if success; error oode otherwise
- */
-int sde_format_get_block_size(const struct sde_format *fmt,
-		uint32_t *w, uint32_t *h);
+		struct sde_hw_fmt_layout *layout);
 
 /**
  * sde_format_check_modified_format - validate format and buffers for
@@ -122,7 +107,7 @@ int sde_format_populate_layout(
 /**
  * sde_format_populate_layout_with_roi - populate the given format layout
  *                     based on mmu, fb, roi, and format found in the fb
- * @aspace:            address space pointer
+ * @aspace:            mmu id handle
  * @fb:                framebuffer pointer
  * @roi:               region of interest (optional)
  * @fmtl:              format layout structure to populate
@@ -134,25 +119,5 @@ int sde_format_populate_layout_with_roi(
 		struct drm_framebuffer *fb,
 		struct sde_rect *roi,
 		struct sde_hw_fmt_layout *fmtl);
-
-/**
- * sde_format_get_framebuffer_size - get framebuffer memory size
- * @format:            DRM pixel format
- * @width:             pixel width
- * @height:            pixel height
- * @pitches:           array of size [SDE_MAX_PLANES] to populate
- *		       pitch for each plane
- * @modifiers:         array to populate with drm modifiers, can be NULL
- * @modifiers_len:     length of modifers array
- *
- * Return: memory size required for frame buffer
- */
-uint32_t sde_format_get_framebuffer_size(
-		const uint32_t format,
-		const uint32_t width,
-		const uint32_t height,
-		const uint32_t *pitches,
-		const uint64_t *modifiers,
-		const uint32_t modifiers_len);
 
 #endif /*_SDE_FORMATS_H */

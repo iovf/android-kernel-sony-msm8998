@@ -1,4 +1,4 @@
-/* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -65,6 +65,8 @@ enum sde_format_flags {
 	(((X)->fetch_mode == SDE_FETCH_UBWC) && \
 			test_bit(SDE_FORMAT_FLAG_COMPRESSED_BIT, (X)->flag))
 
+#define TO_S15D16(_x_) ((_x_) << 7)
+
 #define SDE_BLEND_FG_ALPHA_FG_CONST	(0 << 0)
 #define SDE_BLEND_FG_ALPHA_BG_CONST	(1 << 0)
 #define SDE_BLEND_FG_ALPHA_FG_PIXEL	(2 << 0)
@@ -82,32 +84,16 @@ enum sde_format_flags {
 #define SDE_BLEND_BG_INV_MOD_ALPHA	(1 << 12)
 #define SDE_BLEND_BG_TRANSP_EN		(1 << 13)
 
-#define SDE_VSYNC0_SOURCE_GPIO		0
-#define SDE_VSYNC1_SOURCE_GPIO		1
-#define SDE_VSYNC2_SOURCE_GPIO		2
-#define SDE_VSYNC_SOURCE_INTF_0		3
-#define SDE_VSYNC_SOURCE_INTF_1		4
-#define SDE_VSYNC_SOURCE_INTF_2		5
-#define SDE_VSYNC_SOURCE_INTF_3		6
-#define SDE_VSYNC_SOURCE_WD_TIMER_4	11
-#define SDE_VSYNC_SOURCE_WD_TIMER_3	12
-#define SDE_VSYNC_SOURCE_WD_TIMER_2	13
-#define SDE_VSYNC_SOURCE_WD_TIMER_1	14
-#define SDE_VSYNC_SOURCE_WD_TIMER_0	15
-
 enum sde_hw_blk_type {
 	SDE_HW_BLK_TOP = 0,
 	SDE_HW_BLK_SSPP,
 	SDE_HW_BLK_LM,
 	SDE_HW_BLK_DSPP,
-	SDE_HW_BLK_DS,
 	SDE_HW_BLK_CTL,
 	SDE_HW_BLK_CDM,
 	SDE_HW_BLK_PINGPONG,
 	SDE_HW_BLK_INTF,
 	SDE_HW_BLK_WB,
-	SDE_HW_BLK_DSC,
-	SDE_HW_BLK_ROT,
 	SDE_HW_BLK_MAX,
 };
 
@@ -163,10 +149,6 @@ enum sde_stage {
 	SDE_STAGE_4,
 	SDE_STAGE_5,
 	SDE_STAGE_6,
-	SDE_STAGE_7,
-	SDE_STAGE_8,
-	SDE_STAGE_9,
-	SDE_STAGE_10,
 	SDE_STAGE_MAX
 };
 enum sde_dspp {
@@ -175,13 +157,6 @@ enum sde_dspp {
 	DSPP_2,
 	DSPP_3,
 	DSPP_MAX
-};
-
-enum sde_ds {
-	DS_TOP,
-	DS_0,
-	DS_1,
-	DS_MAX
 };
 
 enum sde_ctl {
@@ -207,17 +182,6 @@ enum sde_pingpong {
 	PINGPONG_4,
 	PINGPONG_S0,
 	PINGPONG_MAX
-};
-
-enum sde_dsc {
-	DSC_NONE = 0,
-	DSC_0,
-	DSC_1,
-	DSC_2,
-	DSC_3,
-	DSC_4,
-	DSC_5,
-	DSC_MAX
 };
 
 enum sde_intf {
@@ -299,18 +263,6 @@ enum sde_iommu_domain {
 	SDE_IOMMU_DOMAIN_MAX
 };
 
-enum sde_rot {
-	ROT_0 = 1,
-	ROT_MAX
-};
-
-enum sde_inline_rot {
-	INLINE_ROT_NONE,
-	INLINE_ROT0_SSPP,
-	INLINE_ROT0_WB,
-	INLINE_ROT_MAX
-};
-
 /**
  * SDE HW,Component order color map
  */
@@ -389,6 +341,15 @@ enum sde_3d_blend_mode {
 	BLEND_3D_V_ROW_INT,
 	BLEND_3D_COL_INT,
 	BLEND_3D_MAX
+};
+
+enum sde_csc_type {
+	SDE_CSC_RGB2YUV_601L,
+	SDE_CSC_RGB2YUV_601FR,
+	SDE_CSC_RGB2YUV_709L,
+	SDE_CSC_RGB2YUV_2020L,
+	SDE_CSC_RGB2YUV_2020FR,
+	SDE_MAX_CSC
 };
 
 /** struct sde_format - defines the format configuration which
@@ -495,109 +456,15 @@ struct sde_mdss_color {
 #define SDE_DBG_MASK_WB       (1 << 8)
 #define SDE_DBG_MASK_TOP      (1 << 9)
 #define SDE_DBG_MASK_VBIF     (1 << 10)
-#define SDE_DBG_MASK_DSC      (1 << 11)
-#define SDE_DBG_MASK_ROT      (1 << 12)
-#define SDE_DBG_MASK_DS       (1 << 13)
 
 /**
  * struct sde_hw_cp_cfg: hardware dspp/lm feature payload.
  * @payload: Feature specific payload.
  * @len: Length of the payload.
- * @ctl: control pointer associated with dspp/lm.
- * @last_feature: last feature that will be set.
- * @num_of_mixers: number of layer mixers for the display.
- * @mixer_info: mixer info pointer associated with lm.
- * @displayv: height of the display.
- * @displayh: width of the display.
  */
 struct sde_hw_cp_cfg {
 	void *payload;
 	u32 len;
-	void *ctl;
-	u32 last_feature;
-	u32 num_of_mixers;
-	void *mixer_info;
-	u32 displayv;
-	u32 displayh;
-};
-
-/**
- * struct sde_hw_dim_layer: dim layer configs
- * @flags: Flag to represent INCLUSIVE/EXCLUSIVE
- * @stage: Blending stage of dim layer
- * @color_fill: Color fill to be used for the layer
- * @rect: Dim layer coordinates
- */
-struct sde_hw_dim_layer {
-	uint32_t flags;
-	uint32_t stage;
-	struct sde_mdss_color color_fill;
-	struct sde_rect rect;
-};
-
-/**
- * struct sde_splash_lm_hw - Struct contains LM block properties
- * @lm_id:	stores the current LM ID
- * @ctl_id:	stores the current CTL ID associated with the LM.
- * @lm_reg_value:Store the LM block register value
- */
-struct sde_splash_lm_hw {
-	u8 lm_id;
-	u8 ctl_id;
-	u32 lm_reg_value;
-};
-
-/**
- * struct ctl_top - Struct contains CTL block properties
- * @value:	Store the CTL block register value
- * @mode_sel:	stores the mode selected in the CTL block
- * @dspp_sel:	stores the dspp selected in the CTL block
- * @pp_sel:	stores the pp selected in the CTL block
- * @intf_sel:	stores the intf selected in the CTL block
- * @lm:		Pointer to store the list of LMs in the CTL block
- * @ctl_lm_cnt:	stores the active number of MDSS "LM" blocks in the CTL block
- */
-struct ctl_top {
-	u32 value;
-	u8 mode_sel;
-	u8 dspp_sel;
-	u8 pp_sel;
-	u8 intf_sel;
-	struct sde_splash_lm_hw lm[LM_MAX - LM_0];
-	u8 ctl_lm_cnt;
-};
-
-/**
- * struct sde_splash_data - Struct contains details of continuous splash
- *	memory region and initial pipeline configuration.
- * @resource_handoff_pending: boolean to notify boot up resource handoff
- *			is pending.
- * @splash_base:	Base address of continuous splash region reserved
- *                      by bootloader
- * @splash_size:	Size of continuous splash region
- * @top:	struct ctl_top objects
- * @ctl_ids:	stores the valid MDSS ctl block ids for the current mode
- * @lm_ids:	stores the valid MDSS layer mixer block ids for the current mode
- * @dsc_ids:	stores the valid MDSS DSC block ids for the current mode
- * @ctl_top_cnt:stores the active number of MDSS "top" blks of the current mode
- * @lm_cnt:	stores the active number of MDSS "LM" blks for the current mode
- * @dsc_cnt:	stores the active number of MDSS "dsc" blks for the current mode
- * @cont_splash_en:	Stores the cont_splash status (enabled/disbled)
- * @single_flush_en: Stores if the single flush is enabled.
- */
-struct sde_splash_data {
-	bool resource_handoff_pending;
-	unsigned long splash_base;
-	u32 splash_size;
-	struct ctl_top top[CTL_MAX - CTL_0];
-	u8 ctl_ids[CTL_MAX - CTL_0];
-	u8 lm_ids[LM_MAX - LM_0];
-	u8 dsc_ids[DSC_MAX - DSC_0];
-	u8 ctl_top_cnt;
-	u8 lm_cnt;
-	u8 dsc_cnt;
-	bool cont_splash_en;
-	bool single_flush_en;
 };
 
 #endif  /* _SDE_HW_MDSS_H */

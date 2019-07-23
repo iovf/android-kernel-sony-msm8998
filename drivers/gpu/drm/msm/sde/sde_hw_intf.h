@@ -1,4 +1,4 @@
-/* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -16,9 +16,26 @@
 #include "sde_hw_catalog.h"
 #include "sde_hw_mdss.h"
 #include "sde_hw_util.h"
-#include "sde_hw_blk.h"
 
 struct sde_hw_intf;
+
+/* Batch size of frames for collecting MISR data */
+#define SDE_CRC_BATCH_SIZE 16
+
+/**
+ * struct sde_misr_params : Interface for getting and setting MISR data
+ *  Assumption is these functions will be called after clocks are enabled
+ * @ enable : enables/disables MISR
+ * @ frame_count : represents number of frames for which MISR is enabled
+ * @ last_idx: number of frames for which MISR data is collected
+ * @ crc_value: stores the collected MISR data
+ */
+struct sde_misr_params {
+	bool enable;
+	u32 frame_count;
+	u32 last_idx;
+	u32 crc_value[SDE_CRC_BATCH_SIZE];
+};
 
 /* intf timing settings */
 struct intf_timing_params {
@@ -38,7 +55,6 @@ struct intf_timing_params {
 	u32 border_clr;
 	u32 underflow_clr;
 	u32 hsync_skew;
-	u32 v_front_porch_fixed;
 };
 
 struct intf_prog_fetch {
@@ -58,12 +74,10 @@ struct intf_status {
  *  Assumption is these functions will be called after clocks are enabled
  * @ setup_timing_gen : programs the timing engine
  * @ setup_prog_fetch : enables/disables the programmable fetch logic
- * @ setup_rot_start  : enables/disables the rotator start trigger
  * @ enable_timing: enable/disable timing engine
  * @ get_status: returns if timing engine is enabled or not
  * @ setup_misr: enables/disables MISR in HW register
  * @ collect_misr: reads and stores MISR data from HW register
- * @ get_line_count: reads current vertical line counter
  */
 struct sde_hw_intf_ops {
 	void (*setup_timing_gen)(struct sde_hw_intf *intf,
@@ -73,9 +87,6 @@ struct sde_hw_intf_ops {
 	void (*setup_prg_fetch)(struct sde_hw_intf *intf,
 			const struct intf_prog_fetch *fetch);
 
-	void (*setup_rot_start)(struct sde_hw_intf *intf,
-			const struct intf_prog_fetch *fetch);
-
 	void (*enable_timing)(struct sde_hw_intf *intf,
 			u8 enable);
 
@@ -83,15 +94,14 @@ struct sde_hw_intf_ops {
 			struct intf_status *status);
 
 	void (*setup_misr)(struct sde_hw_intf *intf,
-			bool enable, u32 frame_count);
+			struct sde_misr_params *misr_map);
 
-	u32 (*collect_misr)(struct sde_hw_intf *intf);
-
-	u32 (*get_line_count)(struct sde_hw_intf *intf);
+	void (*collect_misr)(struct sde_hw_intf *intf,
+			struct sde_misr_params *misr_map);
 };
 
 struct sde_hw_intf {
-	struct sde_hw_blk base;
+	/* base */
 	struct sde_hw_blk_reg_map hw;
 
 	/* intf */
@@ -102,16 +112,6 @@ struct sde_hw_intf {
 	/* ops */
 	struct sde_hw_intf_ops ops;
 };
-
-/**
- * to_sde_hw_intf - convert base object sde_hw_base to container
- * @hw: Pointer to base hardware block
- * return: Pointer to hardware block container
- */
-static inline struct sde_hw_intf *to_sde_hw_intf(struct sde_hw_blk *hw)
-{
-	return container_of(hw, struct sde_hw_intf, base);
-}
 
 /**
  * sde_hw_intf_init(): Initializes the intf driver for the passed

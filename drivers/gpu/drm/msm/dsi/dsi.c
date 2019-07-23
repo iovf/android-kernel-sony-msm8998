@@ -29,7 +29,7 @@ static int dsi_get_phy(struct msm_dsi *msm_dsi)
 	struct platform_device *phy_pdev;
 	struct device_node *phy_node;
 
-	phy_node = of_parse_phandle(pdev->dev.of_node, "phys", 0);
+	phy_node = of_parse_phandle(pdev->dev.of_node, "qcom,dsi-phy", 0);
 	if (!phy_node) {
 		dev_err(&pdev->dev, "cannot find phy device\n");
 		return -ENXIO;
@@ -169,7 +169,6 @@ static struct platform_driver dsi_driver = {
 	.driver = {
 		.name = "msm_dsi",
 		.of_match_table = dt_match,
-		.suppress_bind_attrs = true,
 	},
 };
 
@@ -193,6 +192,9 @@ int msm_dsi_modeset_init(struct msm_dsi *msm_dsi, struct drm_device *dev,
 	struct msm_drm_private *priv = dev->dev_private;
 	struct drm_bridge *ext_bridge;
 	int ret, i;
+
+	if (!msm_dsi)
+		return -EINVAL;
 
 	if (WARN_ON(!encoders[MSM_DSI_VIDEO_ENCODER_ID] ||
 		!encoders[MSM_DSI_CMD_ENCODER_ID]))
@@ -247,19 +249,17 @@ int msm_dsi_modeset_init(struct msm_dsi *msm_dsi, struct drm_device *dev,
 
 	return 0;
 fail:
-	if (msm_dsi) {
-		/* bridge/connector are normally destroyed by drm: */
-		if (msm_dsi->bridge) {
-			msm_dsi_manager_bridge_destroy(msm_dsi->bridge);
-			msm_dsi->bridge = NULL;
-		}
-
-		/* don't destroy connector if we didn't make it */
-		if (msm_dsi->connector && !msm_dsi->external_bridge)
-			msm_dsi->connector->funcs->destroy(msm_dsi->connector);
-
-		msm_dsi->connector = NULL;
+	/* bridge/connector are normally destroyed by drm: */
+	if (msm_dsi->bridge) {
+		msm_dsi_manager_bridge_destroy(msm_dsi->bridge);
+		msm_dsi->bridge = NULL;
 	}
+
+	/* don't destroy connector if we didn't make it */
+	if (msm_dsi->connector && !msm_dsi->external_bridge)
+		msm_dsi->connector->funcs->destroy(msm_dsi->connector);
+
+	msm_dsi->connector = NULL;
 
 	return ret;
 }

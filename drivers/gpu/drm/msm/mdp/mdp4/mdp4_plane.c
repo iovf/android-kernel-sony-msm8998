@@ -81,7 +81,7 @@ static void mdp4_plane_install_properties(struct drm_plane *plane,
 	// XXX
 }
 
-static int mdp4_plane_set_property(struct drm_plane *plane,
+int mdp4_plane_set_property(struct drm_plane *plane,
 		struct drm_property *property, uint64_t val)
 {
 	// XXX
@@ -99,7 +99,7 @@ static const struct drm_plane_funcs mdp4_plane_funcs = {
 };
 
 static int mdp4_plane_prepare_fb(struct drm_plane *plane,
-				 struct drm_plane_state *new_state)
+		const struct drm_plane_state *new_state)
 {
 	struct mdp4_plane *mdp4_plane = to_mdp4_plane(plane);
 	struct mdp4_kms *mdp4_kms = get_kms(plane);
@@ -113,7 +113,7 @@ static int mdp4_plane_prepare_fb(struct drm_plane *plane,
 }
 
 static void mdp4_plane_cleanup_fb(struct drm_plane *plane,
-				  struct drm_plane_state *old_state)
+		const struct drm_plane_state *old_state)
 {
 	struct mdp4_plane *mdp4_plane = to_mdp4_plane(plane);
 	struct mdp4_kms *mdp4_kms = get_kms(plane);
@@ -397,8 +397,7 @@ struct drm_plane *mdp4_plane_init(struct drm_device *dev,
 
 	type = private_plane ? DRM_PLANE_TYPE_PRIMARY : DRM_PLANE_TYPE_OVERLAY;
 	ret = drm_universal_plane_init(dev, plane, 0xff, &mdp4_plane_funcs,
-				 mdp4_plane->formats, mdp4_plane->nformats,
-				 type, NULL);
+				 mdp4_plane->formats, mdp4_plane->nformats, type);
 	if (ret)
 		goto fail;
 

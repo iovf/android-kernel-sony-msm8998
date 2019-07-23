@@ -1,4 +1,4 @@
-/* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -9,11 +9,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-/*
- * NOTE: This file has been modified by Sony Mobile Communications Inc.
- * Modifications are Copyright (c) 2018 Sony Mobile Communications Inc,
- * and licensed under the license of the file.
- */
 
 #ifndef _SDE_HW_TOP_H
 #define _SDE_HW_TOP_H
@@ -21,7 +16,6 @@
 #include "sde_hw_catalog.h"
 #include "sde_hw_mdss.h"
 #include "sde_hw_util.h"
-#include "sde_hw_blk.h"
 
 struct sde_hw_mdp;
 
@@ -83,24 +77,6 @@ struct sde_danger_safe_status {
 };
 
 /**
- * struct sde_vsync_source_cfg - configure vsync source and configure the
- *                                    watchdog timers if required.
- * @pp_count: number of ping pongs active
- * @frame_rate: Display frame rate
- * @ppnumber: ping pong index array
- * @vsync_source: vsync source selection
- * @is_dummy: a dummy source of vsync selection. It must not be selected for
- *           any case other than sde rsc idle request.
- */
-struct sde_vsync_source_cfg {
-	u32 pp_count;
-	u32 frame_rate;
-	u32 ppnumber[PINGPONG_MAX];
-	u32 vsync_source;
-	bool is_dummy;
-};
-
-/**
  * struct sde_hw_mdp_ops - interface to the MDP TOP Hw driver functions
  * Assumption is these functions will be called after clocks are enabled.
  * @setup_split_pipe : Programs the pipe control registers
@@ -151,13 +127,6 @@ struct sde_hw_mdp_ops {
 			enum sde_clk_ctrl_type clk_ctrl, bool enable);
 
 	/**
-	 * setup_dce - set DCE mux for DSC ctrl path
-	 * @mdp: mdp top context driver
-	 * @dce_sel: dce_mux value
-	 */
-	void (*setup_dce)(struct sde_hw_mdp *mdp, u32 dce_sel);
-
-	/**
 	 * get_danger_status - get danger status
 	 * @mdp: mdp top context driver
 	 * @status: Pointer to danger safe status
@@ -166,74 +135,28 @@ struct sde_hw_mdp_ops {
 			struct sde_danger_safe_status *status);
 
 	/**
-	 * setup_vsync_source - setup vsync source configuration details
-	 * @mdp: mdp top context driver
-	 * @cfg: vsync source selection configuration
-	 */
-	void (*setup_vsync_source)(struct sde_hw_mdp *mdp,
-				struct sde_vsync_source_cfg *cfg);
-
-	/**
 	 * get_safe_status - get safe status
 	 * @mdp: mdp top context driver
 	 * @status: Pointer to danger safe status
 	 */
 	void (*get_safe_status)(struct sde_hw_mdp *mdp,
 			struct sde_danger_safe_status *status);
-
-	/**
-	 * get_split_flush_status - get split flush status
-	 * @mdp: mdp top context driver
-	 */
-	u32 (*get_split_flush_status)(struct sde_hw_mdp *mdp);
-
-	/**
-	 * reset_ubwc - reset top level UBWC configuration
-	 * @mdp: mdp top context driver
-	 * @m: pointer to mdss catalog data
-	 */
-	void (*reset_ubwc)(struct sde_hw_mdp *mdp, struct sde_mdss_cfg *m);
-
-	/**
-	 * intf_audio_select - select the external interface for audio
-	 * @mdp: mdp top context driver
-	 */
-	void (*intf_audio_select)(struct sde_hw_mdp *mdp);
-
-	/**
-	 * set_cwb_ppb_cntl - select the data point for CWB
-	 * @mdp: mdp top context driver
-	 * @dual: indicates if dual pipe line needs to be programmed
-	 * @dspp_out : true if dspp output required. LM is default tap point
-	 */
-	void (*set_cwb_ppb_cntl)(struct sde_hw_mdp *mdp,
-			bool dual, bool dspp_out);
 };
 
 struct sde_hw_mdp {
-	struct sde_hw_blk base;
+	/* base */
 	struct sde_hw_blk_reg_map hw;
 
-	/* top */
+	/* intf */
 	enum sde_mdp idx;
-	const struct sde_mdp_cfg *caps;
+	const struct sde_mdp_cfg *cap;
 
 	/* ops */
 	struct sde_hw_mdp_ops ops;
 };
 
 /**
- * to_sde_hw_mdp - convert base object sde_hw_base to container
- * @hw: Pointer to base hardware block
- * return: Pointer to hardware block container
- */
-static inline struct sde_hw_mdp *to_sde_hw_mdp(struct sde_hw_blk *hw)
-{
-	return container_of(hw, struct sde_hw_mdp, base);
-}
-
-/**
- * sde_hw_mdptop_init - initializes the top driver for the passed idx
+ * sde_hw_intf_init - initializes the intf driver for the passed interface idx
  * @idx:  Interface index for which driver object is required
  * @addr: Mapped register io address of MDP
  * @m:    Pointer to mdss catalog data

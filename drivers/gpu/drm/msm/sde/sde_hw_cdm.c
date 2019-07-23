@@ -15,7 +15,6 @@
 #include "sde_hw_catalog.h"
 #include "sde_hw_cdm.h"
 #include "sde_dbg.h"
-#include "sde_kms.h"
 
 #define CDM_CSC_10_OPMODE                  0x000
 #define CDM_CSC_10_BASE                    0x004
@@ -230,7 +229,7 @@ int sde_hw_cdm_enable(struct sde_hw_cdm *ctx,
 		return -EINVAL;
 
 	if (cdm->output_type == CDM_CDWN_OUTPUT_HDMI) {
-		if (fmt->chroma_sample != SDE_CHROMA_H1V2)
+		if (fmt->chroma_sample == SDE_CHROMA_H1V2)
 			return -EINVAL; /*unsupported format */
 		opmode = BIT(0);
 		opmode |= (fmt->chroma_sample << 1);
@@ -269,11 +268,6 @@ static void _setup_cdm_ops(struct sde_hw_cdm_ops *ops,
 	ops->disable = sde_hw_cdm_disable;
 }
 
-static struct sde_hw_blk_ops sde_hw_ops = {
-	.start = NULL,
-	.stop = NULL,
-};
-
 struct sde_hw_cdm *sde_hw_cdm_init(enum sde_cdm idx,
 		void __iomem *addr,
 		struct sde_mdss_cfg *m,
@@ -281,7 +275,6 @@ struct sde_hw_cdm *sde_hw_cdm_init(enum sde_cdm idx,
 {
 	struct sde_hw_cdm *c;
 	struct sde_cdm_cfg *cfg;
-	int rc;
 
 	c = kzalloc(sizeof(*c), GFP_KERNEL);
 	if (!c)
@@ -294,18 +287,9 @@ struct sde_hw_cdm *sde_hw_cdm_init(enum sde_cdm idx,
 	}
 
 	c->idx = idx;
-	c->caps = cfg;
-	_setup_cdm_ops(&c->ops, c->caps->features);
+	c->cdm_hw_cap = cfg;
+	_setup_cdm_ops(&c->ops, c->cdm_hw_cap->features);
 	c->hw_mdp = hw_mdp;
-
-	rc = sde_hw_blk_init(&c->base, SDE_HW_BLK_CDM, idx, &sde_hw_ops);
-	if (rc) {
-		SDE_ERROR("failed to init hw blk %d\n", rc);
-		goto blk_init_error;
-	}
-
-	sde_dbg_reg_register_dump_range(SDE_DBG_NAME, cfg->name, c->hw.blk_off,
-			c->hw.blk_off + c->hw.length, c->hw.xin_id);
 
 	/*
 	 * Perform any default initialization for the chroma down module
@@ -313,17 +297,13 @@ struct sde_hw_cdm *sde_hw_cdm_init(enum sde_cdm idx,
 	 */
 	sde_hw_cdm_setup_csc_10bit(c, &rgb2yuv_cfg);
 
+	sde_dbg_reg_register_dump_range(SDE_DBG_NAME, cfg->name, c->hw.blk_off,
+			c->hw.blk_off + c->hw.length, c->hw.xin_id);
+
 	return c;
-
-blk_init_error:
-	kzfree(c);
-
-	return ERR_PTR(rc);
 }
 
 void sde_hw_cdm_destroy(struct sde_hw_cdm *cdm)
 {
-	if (cdm)
-		sde_hw_blk_destroy(&cdm->base);
 	kfree(cdm);
 }

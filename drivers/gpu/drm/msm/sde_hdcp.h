@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, 2014-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -23,43 +23,47 @@
 #include <drm/drmP.h>
 #include <drm/drm_crtc.h>
 #include <drm/drm_edid.h>
+#include "hdmi.h"
 #include "sde_kms.h"
+#include "sde_hdmi_util.h"
+
+#ifdef SDE_HDCP_DEBUG_ENABLE
+#define SDE_HDCP_DEBUG(fmt, args...)   SDE_ERROR(fmt, ##args)
+#else
+#define SDE_HDCP_DEBUG(fmt, args...)   SDE_DEBUG(fmt, ##args)
+#endif
+
+#define SDE_HDCP_SRM_FAIL 29
 
 enum sde_hdcp_client_id {
 	HDCP_CLIENT_HDMI,
 	HDCP_CLIENT_DP,
 };
 
-enum sde_hdcp_state {
+enum sde_hdcp_states {
 	HDCP_STATE_INACTIVE,
 	HDCP_STATE_AUTHENTICATING,
 	HDCP_STATE_AUTHENTICATED,
 	HDCP_STATE_AUTH_FAIL,
-};
-
-enum sde_hdcp_version {
-	HDCP_VERSION_NONE,
-	HDCP_VERSION_1X,
-	HDCP_VERSION_2P2
+	HDCP_STATE_AUTH_FAIL_NOREAUTH,
+	HDCP_STATE_AUTH_ENC_NONE,
+	HDCP_STATE_AUTH_ENC_1X,
+	HDCP_STATE_AUTH_ENC_2P2
 };
 
 struct sde_hdcp_init_data {
-	struct device *msm_hdcp_dev;
 	struct dss_io_data *core_io;
-	struct dss_io_data *dp_ahb;
-	struct dss_io_data *dp_aux;
-	struct dss_io_data *dp_link;
-	struct dss_io_data *dp_p0;
 	struct dss_io_data *qfprom_io;
 	struct dss_io_data *hdcp_io;
-	struct drm_dp_aux *drm_aux;
 	struct mutex *mutex;
 	struct workqueue_struct *workq;
 	void *cb_data;
-	void (*notify_status)(void *cb_data, enum sde_hdcp_state state);
+	void (*notify_status)(void *cb_data, enum sde_hdcp_states status);
+	struct sde_hdmi_tx_ddc_ctrl *ddc_ctrl;
 	u8 sink_rx_status;
-	unsigned char *revision;
+	u16 *version;
 	u32 phy_addr;
+	u32 hdmi_tx_ver;
 	bool sec_access;
 	enum sde_hdcp_client_id client_id;
 };
@@ -73,32 +77,11 @@ struct sde_hdcp_ops {
 	void (*off)(void *hdcp_ctrl);
 };
 
-static inline const char *sde_hdcp_state_name(enum sde_hdcp_state hdcp_state)
-{
-	switch (hdcp_state) {
-	case HDCP_STATE_INACTIVE:	return "HDCP_STATE_INACTIVE";
-	case HDCP_STATE_AUTHENTICATING:	return "HDCP_STATE_AUTHENTICATING";
-	case HDCP_STATE_AUTHENTICATED:	return "HDCP_STATE_AUTHENTICATED";
-	case HDCP_STATE_AUTH_FAIL:	return "HDCP_STATE_AUTH_FAIL";
-	default:			return "???";
-	}
-}
-
-static inline const char *sde_hdcp_version(enum sde_hdcp_version hdcp_version)
-{
-	switch (hdcp_version) {
-	case HDCP_VERSION_NONE:		return "HDCP_VERSION_NONE";
-	case HDCP_VERSION_1X:		return "HDCP_VERSION_1X";
-	case HDCP_VERSION_2P2:		return "HDCP_VERSION_2P2";
-	default:			return "???";
-	}
-}
-
 void *sde_hdcp_1x_init(struct sde_hdcp_init_data *init_data);
 void sde_hdcp_1x_deinit(void *input);
 struct sde_hdcp_ops *sde_hdcp_1x_start(void *input);
-void *sde_dp_hdcp2p2_init(struct sde_hdcp_init_data *init_data);
-void sde_dp_hdcp2p2_deinit(void *input);
-const char *sde_hdcp_state_name(enum sde_hdcp_state hdcp_state);
-struct sde_hdcp_ops *sde_dp_hdcp2p2_start(void *input);
+void *sde_hdmi_hdcp2p2_init(struct sde_hdcp_init_data *init_data);
+void sde_hdmi_hdcp2p2_deinit(void *input);
+const char *sde_hdcp_state_name(enum sde_hdcp_states hdcp_state);
+struct sde_hdcp_ops *sde_hdmi_hdcp2p2_start(void *input);
 #endif /* __SDE_HDCP_H__ */

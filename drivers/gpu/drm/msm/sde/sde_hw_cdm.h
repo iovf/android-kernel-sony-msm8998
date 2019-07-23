@@ -15,7 +15,6 @@
 
 #include "sde_hw_mdss.h"
 #include "sde_hw_top.h"
-#include "sde_hw_blk.h"
 
 struct sde_hw_cdm;
 
@@ -93,11 +92,11 @@ struct sde_hw_cdm_ops {
 };
 
 struct sde_hw_cdm {
-	struct sde_hw_blk base;
+	/* base */
 	struct sde_hw_blk_reg_map hw;
 
 	/* chroma down */
-	const struct sde_cdm_cfg *caps;
+	const struct sde_cdm_cfg   *cdm_hw_cap;
 	enum  sde_cdm  idx;
 
 	/* mdp top hw driver */
@@ -106,16 +105,6 @@ struct sde_hw_cdm {
 	/* ops */
 	struct sde_hw_cdm_ops ops;
 };
-
-/**
- * sde_hw_cdm - convert base object sde_hw_base to container
- * @hw: Pointer to base hardware block
- * return: Pointer to hardware block container
- */
-static inline struct sde_hw_cdm *to_sde_hw_cdm(struct sde_hw_blk *hw)
-{
-	return container_of(hw, struct sde_hw_cdm, base);
-}
 
 /**
  * sde_hw_cdm_init - initializes the cdm hw driver object.

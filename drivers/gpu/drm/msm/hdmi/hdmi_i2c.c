@@ -17,65 +17,15 @@
 
 #include "hdmi.h"
 
-struct hdmi_i2c_adapter {
-	struct i2c_adapter base;
-	struct hdmi *hdmi;
-	bool sw_done;
-	wait_queue_head_t ddc_event;
-};
-#define to_hdmi_i2c_adapter(x) container_of(x, struct hdmi_i2c_adapter, base)
-
-static void init_ddc(struct hdmi_i2c_adapter *hdmi_i2c)
-{
-	struct hdmi *hdmi = hdmi_i2c->hdmi;
-
-	hdmi_write(hdmi, REG_HDMI_DDC_CTRL,
-			HDMI_DDC_CTRL_SW_STATUS_RESET);
-	hdmi_write(hdmi, REG_HDMI_DDC_CTRL,
-			HDMI_DDC_CTRL_SOFT_RESET);
-
-	hdmi_write(hdmi, REG_HDMI_DDC_SPEED,
-			HDMI_DDC_SPEED_THRESHOLD(2) |
-			HDMI_DDC_SPEED_PRESCALE(10));
-
-	hdmi_write(hdmi, REG_HDMI_DDC_SETUP,
-			HDMI_DDC_SETUP_TIMEOUT(0xff));
-
-	/* enable reference timer for 27us */
-	hdmi_write(hdmi, REG_HDMI_DDC_REF,
-			HDMI_DDC_REF_REFTIMER_ENABLE |
-			HDMI_DDC_REF_REFTIMER(27));
-}
-
-static int ddc_clear_irq(struct hdmi_i2c_adapter *hdmi_i2c)
-{
-	struct hdmi *hdmi = hdmi_i2c->hdmi;
-	struct drm_device *dev = hdmi->dev;
-	uint32_t retry = 0xffff;
-	uint32_t ddc_int_ctrl;
-
-	do {
-		--retry;
-
-		hdmi_write(hdmi, REG_HDMI_DDC_INT_CTRL,
-				HDMI_DDC_INT_CTRL_SW_DONE_ACK |
-				HDMI_DDC_INT_CTRL_SW_DONE_MASK);
-
-		ddc_int_ctrl = hdmi_read(hdmi, REG_HDMI_DDC_INT_CTRL);
-
-	} while ((ddc_int_ctrl & HDMI_DDC_INT_CTRL_SW_DONE_INT) && retry);
-
-	if (!retry) {
-		dev_err(dev->dev, "timeout waiting for DDC\n");
-		return -ETIMEDOUT;
-	}
-
-	hdmi_i2c->sw_done = false;
-
-	return 0;
-}
-
 #define MAX_TRANSACTIONS 4
+
+#define SDE_DDC_TXN_CNT_MASK 0x07ff0000
+#define SDE_DDC_TXN_CNT_SHIFT 16
+
+static inline uint32_t SDE_HDMI_I2C_TRANSACTION_REG_CNT(uint32_t val)
+{
+	return ((val) << SDE_DDC_TXN_CNT_SHIFT) & SDE_DDC_TXN_CNT_MASK;
+}
 
 static bool sw_done(struct hdmi_i2c_adapter *hdmi_i2c)
 {
@@ -97,7 +47,7 @@ static bool sw_done(struct hdmi_i2c_adapter *hdmi_i2c)
 	return hdmi_i2c->sw_done;
 }
 
-static int msm_hdmi_i2c_xfer(struct i2c_adapter *i2c,
+static int hdmi_i2c_xfer(struct i2c_adapter *i2c,
 		struct i2c_msg *msgs, int num)
 {
 	struct hdmi_i2c_adapter *hdmi_i2c = to_hdmi_i2c_adapter(i2c);
@@ -115,12 +65,13 @@ static int msm_hdmi_i2c_xfer(struct i2c_adapter *i2c,
 
 	WARN_ON(!(hdmi_read(hdmi, REG_HDMI_CTRL) & HDMI_CTRL_ENABLE));
 
+
 	if (num == 0)
 		return num;
 
-	init_ddc(hdmi_i2c);
+	init_ddc(hdmi);
 
-	ret = ddc_clear_irq(hdmi_i2c);
+	ret = ddc_clear_irq(hdmi);
 	if (ret)
 		return ret;
 
@@ -155,7 +106,7 @@ static int msm_hdmi_i2c_xfer(struct i2c_adapter *i2c,
 			}
 		}
 
-		i2c_trans = HDMI_I2C_TRANSACTION_REG_CNT(p->len) |
+		i2c_trans = SDE_HDMI_I2C_TRANSACTION_REG_CNT(p->len) |
 				HDMI_I2C_TRANSACTION_REG_RW(
 						(p->flags & I2C_M_RD) ? DDC_READ : DDC_WRITE) |
 				HDMI_I2C_TRANSACTION_REG_START;
@@ -177,9 +128,13 @@ static int msm_hdmi_i2c_xfer(struct i2c_adapter *i2c,
 			ret = -ETIMEDOUT;
 		dev_warn(dev->dev, "DDC timeout: %d\n", ret);
 		DBG("sw_status=%08x, hw_status=%08x, int_ctrl=%08x",
-				hdmi_read(hdmi, REG_HDMI_DDC_SW_STATUS),
-				hdmi_read(hdmi, REG_HDMI_DDC_HW_STATUS),
-				hdmi_read(hdmi, REG_HDMI_DDC_INT_CTRL));
+			hdmi_read(hdmi, REG_HDMI_DDC_SW_STATUS),
+			hdmi_read(hdmi, REG_HDMI_DDC_HW_STATUS),
+			hdmi_read(hdmi, REG_HDMI_DDC_INT_CTRL));
+		if (hdmi->use_hard_timeout) {
+			hdmi->use_hard_timeout = false;
+			hdmi->timeout_count = 0;
+		}
 		return ret;
 	}
 
@@ -213,20 +168,24 @@ static int msm_hdmi_i2c_xfer(struct i2c_adapter *i2c,
 		}
 	}
 
+	if (hdmi->use_hard_timeout) {
+		hdmi->use_hard_timeout = false;
+		hdmi->timeout_count = jiffies_to_msecs(ret);
+	}
 	return i;
 }
 
-static u32 msm_hdmi_i2c_func(struct i2c_adapter *adapter)
+static u32 hdmi_i2c_func(struct i2c_adapter *adapter)
 {
 	return I2C_FUNC_I2C | I2C_FUNC_SMBUS_EMUL;
 }
 
-static const struct i2c_algorithm msm_hdmi_i2c_algorithm = {
-	.master_xfer	= msm_hdmi_i2c_xfer,
-	.functionality	= msm_hdmi_i2c_func,
+static const struct i2c_algorithm hdmi_i2c_algorithm = {
+	.master_xfer	= hdmi_i2c_xfer,
+	.functionality	= hdmi_i2c_func,
 };
 
-void msm_hdmi_i2c_irq(struct i2c_adapter *i2c)
+void hdmi_i2c_irq(struct i2c_adapter *i2c)
 {
 	struct hdmi_i2c_adapter *hdmi_i2c = to_hdmi_i2c_adapter(i2c);
 
@@ -234,15 +193,16 @@ void msm_hdmi_i2c_irq(struct i2c_adapter *i2c)
 		wake_up_all(&hdmi_i2c->ddc_event);
 }
 
-void msm_hdmi_i2c_destroy(struct i2c_adapter *i2c)
+void hdmi_i2c_destroy(struct i2c_adapter *i2c)
 {
 	struct hdmi_i2c_adapter *hdmi_i2c = to_hdmi_i2c_adapter(i2c);
 	i2c_del_adapter(i2c);
 	kfree(hdmi_i2c);
 }
 
-struct i2c_adapter *msm_hdmi_i2c_init(struct hdmi *hdmi)
+struct i2c_adapter *hdmi_i2c_init(struct hdmi *hdmi)
 {
+	struct drm_device *dev = hdmi->dev;
 	struct hdmi_i2c_adapter *hdmi_i2c;
 	struct i2c_adapter *i2c = NULL;
 	int ret;
@@ -263,16 +223,18 @@ struct i2c_adapter *msm_hdmi_i2c_init(struct hdmi *hdmi)
 	i2c->class = I2C_CLASS_DDC;
 	snprintf(i2c->name, sizeof(i2c->name), "msm hdmi i2c");
 	i2c->dev.parent = &hdmi->pdev->dev;
-	i2c->algo = &msm_hdmi_i2c_algorithm;
+	i2c->algo = &hdmi_i2c_algorithm;
 
 	ret = i2c_add_adapter(i2c);
-	if (ret)
+	if (ret) {
+		dev_err(dev->dev, "failed to register hdmi i2c: %d\n", ret);
 		goto fail;
+	}
 
 	return i2c;
 
 fail:
 	if (i2c)
-		msm_hdmi_i2c_destroy(i2c);
+		hdmi_i2c_destroy(i2c);
 	return ERR_PTR(ret);
 }
