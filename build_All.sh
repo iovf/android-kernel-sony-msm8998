@@ -23,21 +23,13 @@ make -j6 O=./out
         --tags_offset 0x00000100 \
         --pagesize 4096 \
         -o ../Final/g8141.img
-rm -rf out_dsds
-export ARCH=arm64
-#export PATH=/root/build_tool/aarch64/bin/:$PATH
-export CLANG_PATH=/root/build_tool/clang-4691093/bin/
-export CROSS_COMPILE=/root/build_tool/aarch64/bin/aarch64-linux-android-
-export PATH=${CLANG_PATH}:${PATH}
-export CLANG_HOST=yes
-export CLANG_TRIPLE=aarch64-linux-gnu-
+cp ./out/arch/arm64/boot/Image.gz-dtb ../Final/g8141-kernel.gz-dtb
+rm -rf out
 export KBUILD_DIFFCONFIG=maple_dsds_diffconfig
-export USE_CCACHE=1
-export CCACHE_DIR=~/.ccache
-make msmcortex-perf_defconfig O=./out_dsds
-make -j6 O=./out_dsds
+make msmcortex-perf_defconfig O=./out
+make -j6 O=./out
 ../Final/mkbootimg.py \
-        --kernel ./out_dsds/arch/arm64/boot/Image.gz-dtb \
+        --kernel ./out/arch/arm64/boot/Image.gz-dtb \
         --ramdisk ../Final/g8142.gz \
         --cmdline "androidboot.hardware=qcom user_debug=31 msm_rtb.filter=0x237 ehci-hcd.park=3 lpm_levels.sleep_disabled=1 sched_enable_hmp=1 sched_enable_power_aware=1 service_locator.enable=1 swiotlb=2048 androidboot.configfs=true androidboot.usbcontroller=a800000.dwc3 zram.backend=z3fold buildvariant=userdebug" \
         --os_version 9 \
@@ -48,17 +40,9 @@ make -j6 O=./out_dsds
         --tags_offset 0x00000100 \
         --pagesize 4096 \
         -o ../Final/g8142.img
+cp ./out/arch/arm64/boot/Image.gz-dtb ../Final/g8142-kernel.gz-dtb
 rm -rf out
-export ARCH=arm64
-#export PATH=/root/build_tool/aarch64/bin/:$PATH
-export CLANG_PATH=/root/build_tool/clang-4691093/bin/
-export CROSS_COMPILE=/root/build_tool/aarch64/bin/aarch64-linux-android-
-export PATH=${CLANG_PATH}:${PATH}
-export CLANG_HOST=yes
-export CLANG_TRIPLE=aarch64-linux-gnu-
 export KBUILD_DIFFCONFIG=poplar_diffconfig
-export USE_CCACHE=1
-export CCACHE_DIR=~/.ccache
 make msmcortex-perf_defconfig O=./out
 make -j6 O=./out
 ../Final/mkbootimg.py \
@@ -73,21 +57,13 @@ make -j6 O=./out
         --tags_offset 0x00000100 \
         --pagesize 4096 \
         -o ../Final/g8341.img
-rm -rf out_dsds
-export ARCH=arm64
-#export PATH=/root/build_tool/aarch64/bin/:$PATH
-export CLANG_PATH=/root/build_tool/clang-4691093/bin/
-export CROSS_COMPILE=/root/build_tool/aarch64/bin/aarch64-linux-android-
-export PATH=${CLANG_PATH}:${PATH}
-export CLANG_HOST=yes
-export CLANG_TRIPLE=aarch64-linux-gnu-
+cp ./out/arch/arm64/boot/Image.gz-dtb ../Final/g8341-kernel.gz-dtb
+rm -rf out
 export KBUILD_DIFFCONFIG=poplar_dsds_diffconfig
-export USE_CCACHE=1
-export CCACHE_DIR=~/.ccache
-make msmcortex-perf_defconfig O=./out_dsds
-make -j6 O=./out_dsds
+make msmcortex-perf_defconfig O=./out
+make -j6 O=./out
 ../Final/mkbootimg.py \
-        --kernel ./out_dsds/arch/arm64/boot/Image.gz-dtb \
+        --kernel ./out/arch/arm64/boot/Image.gz-dtb \
         --ramdisk ../Final/g8342.gz \
         --cmdline "androidboot.hardware=qcom user_debug=31 msm_rtb.filter=0x237 ehci-hcd.park=3 lpm_levels.sleep_disabled=1 sched_enable_hmp=1 sched_enable_power_aware=1 service_locator.enable=1 swiotlb=2048 androidboot.configfs=true androidboot.usbcontroller=a800000.dwc3 zram.backend=z3fold buildvariant=userdebug" \
         --os_version 9 \
@@ -98,3 +74,4 @@ make -j6 O=./out_dsds
         --tags_offset 0x00000100 \
         --pagesize 4096 \
         -o ../Final/g8342.img
+cp ./out/arch/arm64/boot/Image.gz-dtb ../Final/g8342-kernel.gz-dtb
